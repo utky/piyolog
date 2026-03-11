@@ -1,0 +1,23 @@
+{
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "haskell.haskell"
+      ]
+    }
+  },
+  "remoteEnv": {
+    "PATH": "/home/vscode/.cabal/bin:/home/vscode/.ghcup/bin:${containerEnv:PATH}"
+  },
+  "mounts": [
+    "source=${localWorkspaceFolderBasename}-ghcup-cache,target=/home/vscode/.ghcup/cache,type=volume"
+  ],
+  "onCreateCommand": ".devcontainer/install-script.sh"
+}
