@@ -9,15 +9,11 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "haskell.haskell"
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff"
       ]
     }
   },
-  "remoteEnv": {
-    "PATH": "/home/vscode/.cabal/bin:/home/vscode/.ghcup/bin:${containerEnv:PATH}"
-  },
-  "mounts": [
-    "source=${localWorkspaceFolderBasename}-ghcup-cache,target=/home/vscode/.ghcup/cache,type=volume"
-  ],
-  "onCreateCommand": ".devcontainer/install-script.sh"
+  "postCreateCommand": ".devcontainer/install-tools.sh"
 }

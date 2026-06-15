@@ -1,0 +1,33 @@
+[project]
+name = "piyolog"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "google-auth>=2.35",
+    "google-api-python-client>=2.149",
+    "google-cloud-bigquery>=3.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.14",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/piyolog"]
+
+[tool.ruff]
+src = ["src"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
