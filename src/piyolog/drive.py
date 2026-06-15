@@ -2,27 +2,31 @@
 
 import io
 import re
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
 from typing import Any
 
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-PIYOLOG_FILENAME_PATTERN = re.compile(r"【ぴよログ】(\d{4})年(\d{1,2})月\.txt$")
+PIYOLOG_FILENAME_PATTERN = re.compile(r"【ぴよログ】(\d{4})年(\d{1,2})月(\.txt)?$")
 PIYOLOG_MIME_TYPE = "text/plain"
+
+
+@dataclass(frozen=True)
+class DriveFile:
+    file_id: str
+    name: str
+    modified_at: datetime
 
 
 def build_drive_service(credentials: Any) -> Any:
     return build("drive", "v3", credentials=credentials)
 
 
-def list_piyolog_files(service: Any, folder_id: str) -> list[dict[str, str]]:
-    """List all ぴよログ .txt files in a Drive folder.
-
-    Returns a list of dicts with keys: id, name.
-    Handles pagination automatically.
-    """
-    results: list[dict[str, str]] = []
+def list_piyolog_files(service: Any, folder_id: str) -> list[DriveFile]:
+    """List all ぴよログ files in a Drive folder. Handles pagination automatically."""
+    results: list[DriveFile] = []
     page_token: str | None = None
 
     query = (
@@ -35,17 +39,18 @@ def list_piyolog_files(service: Any, folder_id: str) -> list[dict[str, str]]:
     while True:
         params: dict[str, Any] = {
             "q": query,
-            "fields": "nextPageToken, files(id, name)",
+            "fields": "nextPageToken, files(id, name, modifiedTime)",
             "pageSize": 100,
         }
         if page_token:
             params["pageToken"] = page_token
 
-        response = service.files().list(**params).execute()
+        response = service.files().list(**params).execute(num_retries=3)
 
         for f in response.get("files", []):
             if PIYOLOG_FILENAME_PATTERN.search(f["name"]):
-                results.append({"id": f["id"], "name": f["name"]})
+                modified_at = datetime.fromisoformat(f["modifiedTime"]).astimezone(timezone.utc)
+                results.append(DriveFile(file_id=f["id"], name=f["name"], modified_at=modified_at))
 
         page_token = response.get("nextPageToken")
         if not page_token:
@@ -61,7 +66,7 @@ def download_file_content(service: Any, file_id: str) -> str:
     downloader = MediaIoBaseDownload(buf, request)
     done = False
     while not done:
-        _, done = downloader.next_chunk()
+        _, done = downloader.next_chunk(num_retries=3)
     return buf.getvalue().decode("utf-8")
 
 
@@ -73,7 +78,7 @@ def parse_year_month_from_filename(file_name: str) -> date:
     m = PIYOLOG_FILENAME_PATTERN.search(file_name)
     if not m:
         raise ValueError(
-            f"Filename does not match 【ぴよログ】YYYY年M月.txt pattern: {file_name!r}"
+            f"Filename does not match 【ぴよログ】YYYY年M月[.txt] pattern: {file_name!r}"
         )
     year = int(m.group(1))
     month = int(m.group(2))

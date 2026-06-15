@@ -13,7 +13,6 @@ Environment variables:
 """
 
 import logging
-import sys
 
 import google.auth
 from google.cloud import bigquery
@@ -40,65 +39,54 @@ def main() -> None:
     drive_service = drive.build_drive_service(credentials)
     bq_client = bigquery.Client(project=config.bq_project_id)
 
-    bq.ensure_dataset_and_table(
+    bq.verify_table_exists(
         bq_client, config.bq_project_id, config.bq_dataset_id, config.bq_table_id
     )
 
     total_processed = 0
-    total_errors = 0
 
     for child_name, folder_id in config.drive_child_folders.items():
         log.info("[%s] Listing files in folder %s", child_name, folder_id)
-        try:
-            files = drive.list_piyolog_files(drive_service, folder_id)
-        except Exception as e:
-            log.error("[%s] Failed to list files: %s", child_name, e)
-            total_errors += 1
-            continue
-
+        files = drive.list_piyolog_files(drive_service, folder_id)
         log.info("[%s] Found %d file(s)", child_name, len(files))
 
-        for file_meta in files:
-            file_name = file_meta["name"]
-            file_id = file_meta["id"]
+        loaded_at_map = bq.fetch_loaded_at(
+            bq_client, config.bq_project_id, config.bq_dataset_id, config.bq_table_id, child_name
+        )
+
+        for drive_file in files:
             try:
-                source_year_month = drive.parse_year_month_from_filename(file_name)
+                source_year_month = drive.parse_year_month_from_filename(drive_file.name)
             except ValueError as e:
-                log.warning("[%s] Skipping %s: %s", child_name, file_name, e)
+                log.warning("[%s] Skipping %s: %s", child_name, drive_file.name, e)
                 continue
 
-            log.info("[%s] Processing %s (%s)", child_name, file_name, source_year_month)
-
-            try:
-                content = drive.download_file_content(drive_service, file_id)
-            except Exception as e:
-                log.error("[%s] Failed to download %s: %s", child_name, file_name, e)
-                total_errors += 1
-                continue
-
-            try:
-                bq.upsert_record(
-                    client=bq_client,
-                    project=config.bq_project_id,
-                    dataset_id=config.bq_dataset_id,
-                    table_id=config.bq_table_id,
-                    child_name=child_name,
-                    source_year_month=source_year_month,
-                    file_name=file_name,
-                    drive_file_id=file_id,
-                    raw_content=content,
-                    loaded_at=bq.utcnow(),
+            existing_loaded_at = loaded_at_map.get(source_year_month)
+            if existing_loaded_at is not None and drive_file.modified_at <= existing_loaded_at:
+                log.info(
+                    "[%s] Skipping %s (not modified since last load)",
+                    child_name, drive_file.name,
                 )
-                log.info("[%s] Loaded %s -> BQ (%d chars)", child_name, file_name, len(content))
-                total_processed += 1
-            except Exception as e:
-                log.error("[%s] Failed to upsert %s: %s", child_name, file_name, e)
-                total_errors += 1
+                continue
 
-    log.info("Done. processed=%d errors=%d", total_processed, total_errors)
+            log.info("[%s] Processing %s (%s)", child_name, drive_file.name, source_year_month)
+            content = drive.download_file_content(drive_service, drive_file.file_id)
+            bq.merge_record(
+                client=bq_client,
+                project=config.bq_project_id,
+                dataset_id=config.bq_dataset_id,
+                table_id=config.bq_table_id,
+                child_name=child_name,
+                source_year_month=source_year_month,
+                file_name=drive_file.name,
+                drive_file_id=drive_file.file_id,
+                raw_content=content,
+                loaded_at=bq.utcnow(),
+            )
+            log.info("[%s] Loaded %s -> BQ (%d chars)", child_name, drive_file.name, len(content))
+            total_processed += 1
 
-    if total_errors > 0:
-        sys.exit(1)
+    log.info("Done. processed=%d", total_processed)
 
 
 if __name__ == "__main__":
