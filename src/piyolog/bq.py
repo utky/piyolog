@@ -1,8 +1,40 @@
 """BigQuery operations for the ぴよログ raw layer."""
 
+import uuid
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
+from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
+
+SCHEMA = [
+    bigquery.SchemaField("child_name", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("source_year_month", "DATE", mode="REQUIRED"),
+    bigquery.SchemaField("file_name", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("drive_file_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("raw_content", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("loaded_at", "TIMESTAMP", mode="REQUIRED"),
+]
+
+
+@dataclass
+class ExportRecord:
+    child_name: str
+    source_year_month: date
+    file_name: str
+    drive_file_id: str
+    raw_content: str
+    loaded_at: datetime
+
+    def to_bq_dict(self) -> dict:
+        return {
+            "child_name": self.child_name,
+            "source_year_month": self.source_year_month.isoformat(),
+            "file_name": self.file_name,
+            "drive_file_id": self.drive_file_id,
+            "raw_content": self.raw_content,
+            "loaded_at": self.loaded_at.isoformat(),
+        }
 
 
 def verify_table_exists(
@@ -15,7 +47,7 @@ def verify_table_exists(
     table_ref = f"{project}.{dataset_id}.{table_id}"
     try:
         client.get_table(table_ref)
-    except Exception as e:
+    except NotFound as e:
         raise RuntimeError(
             f"BigQuery table {table_ref!r} not found. "
             "Provision it with OpenTofu before running this job."
@@ -44,57 +76,56 @@ def fetch_loaded_at(
     return {row.source_year_month: row.loaded_at.astimezone(timezone.utc) for row in rows}
 
 
-def merge_record(
+def bulk_merge(
     client: bigquery.Client,
     project: str,
     dataset_id: str,
     table_id: str,
-    child_name: str,
-    source_year_month: date,
-    file_name: str,
-    drive_file_id: str,
-    raw_content: str,
-    loaded_at: datetime,
+    records: list[ExportRecord],
 ) -> None:
-    """Upsert a single file record using MERGE keyed on (child_name, source_year_month)."""
-    table_ref = f"`{project}.{dataset_id}.{table_id}`"
-    sym_date = source_year_month.isoformat()
+    """Load records into a temporary table then MERGE into the target in a single query.
 
-    merge_sql = f"""
-        MERGE {table_ref} AS T
-        USING (
-            SELECT
-                @child_name          AS child_name,
-                @source_year_month   AS source_year_month,
-                @file_name           AS file_name,
-                @drive_file_id       AS drive_file_id,
-                @raw_content         AS raw_content,
-                @loaded_at           AS loaded_at
-        ) AS S
-        ON T.child_name = S.child_name
-           AND T.source_year_month = S.source_year_month
-        WHEN MATCHED THEN
-            UPDATE SET
-                file_name      = S.file_name,
-                drive_file_id  = S.drive_file_id,
-                raw_content    = S.raw_content,
-                loaded_at      = S.loaded_at
-        WHEN NOT MATCHED THEN
-            INSERT (child_name, source_year_month, file_name, drive_file_id, raw_content, loaded_at)
-            VALUES (S.child_name, S.source_year_month, S.file_name,
-                    S.drive_file_id, S.raw_content, S.loaded_at)
+    Using a temp table avoids query parameter size limits from large raw_content strings.
+    The temp table is always deleted in the finally block.
     """
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("child_name", "STRING", child_name),
-            bigquery.ScalarQueryParameter("source_year_month", "DATE", sym_date),
-            bigquery.ScalarQueryParameter("file_name", "STRING", file_name),
-            bigquery.ScalarQueryParameter("drive_file_id", "STRING", drive_file_id),
-            bigquery.ScalarQueryParameter("raw_content", "STRING", raw_content),
-            bigquery.ScalarQueryParameter("loaded_at", "TIMESTAMP", loaded_at.isoformat()),
-        ]
+    if not records:
+        return
+
+    tmp_id = f"_tmp_export_{uuid.uuid4().hex}"
+    tmp_ref = f"{project}.{dataset_id}.{tmp_id}"
+    target_ref = f"`{project}.{dataset_id}.{table_id}`"
+
+    load_job = client.load_table_from_json(
+        [r.to_bq_dict() for r in records],
+        tmp_ref,
+        job_config=bigquery.LoadJobConfig(
+            schema=SCHEMA,
+            write_disposition="WRITE_TRUNCATE",
+        ),
     )
-    client.query(merge_sql, job_config=job_config).result()
+    load_job.result()
+
+    try:
+        merge_sql = f"""
+            MERGE {target_ref} AS T
+            USING `{project}.{dataset_id}.{tmp_id}` AS S
+            ON T.child_name = S.child_name
+               AND T.source_year_month = S.source_year_month
+            WHEN MATCHED THEN
+                UPDATE SET
+                    file_name     = S.file_name,
+                    drive_file_id = S.drive_file_id,
+                    raw_content   = S.raw_content,
+                    loaded_at     = S.loaded_at
+            WHEN NOT MATCHED THEN
+                INSERT (child_name, source_year_month, file_name,
+                        drive_file_id, raw_content, loaded_at)
+                VALUES (S.child_name, S.source_year_month, S.file_name,
+                        S.drive_file_id, S.raw_content, S.loaded_at)
+        """
+        client.query(merge_sql).result()
+    finally:
+        client.delete_table(tmp_ref, not_found_ok=True)
 
 
 def utcnow() -> datetime:
