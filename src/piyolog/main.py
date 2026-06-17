@@ -21,15 +21,25 @@ from google.cloud import bigquery
 from piyolog import bq, drive
 from piyolog.config import Config
 
+_STDLIB_LOG_ATTRS = frozenset({
+    "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
+    "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
+    "created", "msecs", "relativeCreated", "thread", "threadName", "process",
+    "processName", "message", "taskName",
+})
+
 
 class _JsonFormatter(logging.Formatter):
     """Emit one JSON object per line for Cloud Logging structured log ingestion."""
 
     def format(self, record: logging.LogRecord) -> str:
-        obj = {
+        obj: dict = {
             "severity": record.levelname,
             "message": record.getMessage(),
         }
+        extra = {k: v for k, v in record.__dict__.items() if k not in _STDLIB_LOG_ATTRS}
+        if extra:
+            obj.update(extra)
         if record.exc_info:
             obj["exception"] = self.formatException(record.exc_info)
         return json.dumps(obj, ensure_ascii=False)
@@ -48,8 +58,8 @@ def main() -> None:
     _setup_logging()
     config = Config()
     log.info("Starting ぴよログ raw layer ingestion")
-    log.info("BQ target: %s", config.bq_table_ref)
-    log.info("Children: %s", list(config.drive_child_folders.keys()))
+    log.info("BQ target", extra={"bq_target": config.bq_table_ref})
+    log.info("Children", extra={"children": list(config.drive_child_folders.keys())})
 
     credentials, _ = google.auth.default(
         scopes=["https://www.googleapis.com/auth/drive.readonly"]
@@ -88,7 +98,7 @@ def main() -> None:
 
             existing_loaded_at = loaded_at_map.get(source_year_month)
             if existing_loaded_at is not None and drive_file.modified_at <= existing_loaded_at:
-                log.info(
+                log.debug(
                     "Skipping unmodified file",
                     extra={"child_name": child_name, "file_name": drive_file.name},
                 )

@@ -1,11 +1,15 @@
 """BigQuery operations for the ぴよログ raw layer."""
 
+import logging
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
 from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
+
+log = logging.getLogger(__name__)
 
 SCHEMA = [
     bigquery.SchemaField("child_name", "STRING", mode="REQUIRED"),
@@ -95,6 +99,7 @@ def bulk_merge(
     tmp_ref = f"{project}.{dataset_id}.{tmp_id}"
     target_ref = f"`{project}.{dataset_id}.{table_id}`"
 
+    t0 = time.monotonic()
     load_job = client.load_table_from_json(
         [r.to_bq_dict() for r in records],
         tmp_ref,
@@ -104,6 +109,10 @@ def bulk_merge(
         ),
     )
     load_job.result()
+    log.info(
+        "Temp table loaded",
+        extra={"rows": len(records), "elapsed_s": round(time.monotonic() - t0, 2)},
+    )
 
     try:
         merge_sql = f"""
@@ -123,9 +132,13 @@ def bulk_merge(
                 VALUES (S.child_name, S.source_year_month, S.file_name,
                         S.drive_file_id, S.raw_content, S.loaded_at)
         """
+        t1 = time.monotonic()
         client.query(merge_sql).result()
+        log.info("MERGE done", extra={"elapsed_s": round(time.monotonic() - t1, 2)})
     finally:
+        t2 = time.monotonic()
         client.delete_table(tmp_ref, not_found_ok=True)
+        log.info("Temp table deleted", extra={"elapsed_s": round(time.monotonic() - t2, 2)})
 
 
 def utcnow() -> datetime:
