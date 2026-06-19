@@ -1,6 +1,7 @@
 """Google Drive API operations for listing and downloading ぴよログ export files."""
 
 import io
+import logging
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -11,6 +12,8 @@ from googleapiclient.http import MediaIoBaseDownload
 
 PIYOLOG_FILENAME_PATTERN = re.compile(r"【ぴよログ】(\d{4})年(\d{1,2})月(\.txt)?$")
 PIYOLOG_MIME_TYPE = "text/plain"
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,7 @@ def list_piyolog_files(service: Any, folder_id: str) -> list[DriveFile]:
     """List all ぴよログ files in a Drive folder. Handles pagination automatically."""
     results: list[DriveFile] = []
     page_token: str | None = None
+    page_num = 0
 
     query = (
         f"'{folder_id}' in parents"
@@ -37,6 +41,7 @@ def list_piyolog_files(service: Any, folder_id: str) -> list[DriveFile]:
     )
 
     while True:
+        page_num += 1
         params: dict[str, Any] = {
             "q": query,
             "fields": "nextPageToken, files(id, name, modifiedTime)",
@@ -45,10 +50,22 @@ def list_piyolog_files(service: Any, folder_id: str) -> list[DriveFile]:
         if page_token:
             params["pageToken"] = page_token
 
+        log.debug("Fetching page", extra={"folder_id": folder_id, "page": page_num})
         response = service.files().list(**params).execute(num_retries=3)
 
-        for f in response.get("files", []):
-            if PIYOLOG_FILENAME_PATTERN.search(f["name"]):
+        files_in_page = response.get("files", [])
+        log.debug(
+            "Page fetched",
+            extra={"folder_id": folder_id, "page": page_num, "count": len(files_in_page)},
+        )
+
+        for f in files_in_page:
+            matched = bool(PIYOLOG_FILENAME_PATTERN.search(f["name"]))
+            log.debug(
+                "File pattern check",
+                extra={"file_name": f["name"], "matched": matched},
+            )
+            if matched:
                 modified_at = datetime.fromisoformat(f["modifiedTime"]).astimezone(timezone.utc)
                 results.append(DriveFile(file_id=f["id"], name=f["name"], modified_at=modified_at))
 
