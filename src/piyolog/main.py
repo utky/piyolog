@@ -9,11 +9,13 @@ Environment variables:
     BQ_TABLE_ID             - BigQuery table ID (default: export_files)
     DRIVE_CHILD_FOLDERS     - JSON mapping child_name -> Drive folder ID (required)
                               e.g. '{"child1": "1ABC...", "child2": "1DEF..."}'
+    LOG_LEVEL               - Logging level (default: INFO). Set to DEBUG for verbose output.
     GOOGLE_APPLICATION_CREDENTIALS - path to service account JSON (optional if running on GCP)
 """
 
 import json
 import logging
+import os
 
 import google.auth
 from google.cloud import bigquery
@@ -21,12 +23,11 @@ from google.cloud import bigquery
 from piyolog import bq, drive
 from piyolog.config import Config
 
-_STDLIB_LOG_ATTRS = frozenset({
-    "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
-    "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
-    "created", "msecs", "relativeCreated", "thread", "threadName", "process",
-    "processName", "message", "taskName",
-})
+# Derive the set of standard LogRecord attributes from an actual LogRecord instance
+# so that any extra={} fields passed by callers are forwarded to the JSON output.
+_STDLIB_LOG_ATTRS = frozenset(
+    logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys()
+)
 
 
 class _JsonFormatter(logging.Formatter):
@@ -46,9 +47,10 @@ class _JsonFormatter(logging.Formatter):
 
 
 def _setup_logging() -> None:
+    level = os.environ.get("LOG_LEVEL", "INFO").upper()
     handler = logging.StreamHandler()
     handler.setFormatter(_JsonFormatter())
-    logging.basicConfig(level=logging.INFO, handlers=[handler])
+    logging.basicConfig(level=level, handlers=[handler])
 
 
 log = logging.getLogger(__name__)
@@ -57,9 +59,13 @@ log = logging.getLogger(__name__)
 def main() -> None:
     _setup_logging()
     config = Config()
-    log.info("Starting ぴよログ raw layer ingestion")
-    log.info("BQ target", extra={"bq_target": config.bq_table_ref})
-    log.info("Children", extra={"children": list(config.drive_child_folders.keys())})
+    log.info(
+        "Starting ぴよログ raw layer ingestion",
+        extra={
+            "bq_target": config.bq_table_ref,
+            "children": list(config.drive_child_folders.keys()),
+        },
+    )
 
     credentials, _ = google.auth.default(
         scopes=["https://www.googleapis.com/auth/drive.readonly"]
@@ -100,7 +106,12 @@ def main() -> None:
             if existing_loaded_at is not None and drive_file.modified_at <= existing_loaded_at:
                 log.debug(
                     "Skipping unmodified file",
-                    extra={"child_name": child_name, "file_name": drive_file.name},
+                    extra={
+                        "child_name": child_name,
+                        "file_name": drive_file.name,
+                        "drive_modified_at": drive_file.modified_at.isoformat(),
+                        "existing_loaded_at": existing_loaded_at.isoformat(),
+                    },
                 )
                 continue
 
