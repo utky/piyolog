@@ -2,71 +2,29 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
-  workflow_dispatch:
-
-permissions:
-  contents: read
+    branches: [main]
 
 jobs:
-  build:
-    name: GHC ${{ matrix.ghc-version }} / cabal ${{ matrix.cabal-version }}
+  lint-and-test:
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        ghc-version:
-          - "9.6"
-          - "9.8"
-          - "9.10"
-        cabal-version:
-          - "latest"
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up GHC ${{ matrix.ghc-version }}
-        uses: haskell-actions/setup@v2
-        id: setup
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
-          ghc-version: ${{ matrix.ghc-version }}
-          cabal-version: ${{ matrix.cabal-version }}
+          enable-cache: true
 
-      - name: Configure the build
-        run: |
-          cabal configure --enable-tests --enable-benchmarks
-          cabal build --dry-run
-        # The dry-run generates dist-newstyle/cache/plan.json for cache keying
-
-      - name: Restore cached dependencies
-        uses: actions/cache/restore@v4
-        id: cache
-        env:
-          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
-          restore-keys: ${{ env.key }}-
+      - name: Set up Python
+        run: uv python install
 
       - name: Install dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: cabal build all --only-dependencies
+        run: uv sync --frozen --extra dev
 
-      - name: Save cached dependencies
-        uses: actions/cache/save@v4
-        if: steps.cache.outputs.cache-hit != 'true'
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ steps.cache.outputs.cache-primary-key }}
-
-      - name: Build
-        run: cabal build all
+      - name: Lint (ruff)
+        run: uv run ruff check .
 
       - name: Run tests
-        run: cabal test all --test-show-details=direct
-
-      - name: Check cabal file
-        run: cabal check
+        run: uv run pytest --tb=short
