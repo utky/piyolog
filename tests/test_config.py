@@ -8,14 +8,14 @@ from piyolog.config import _parse_drive_folders, _require_env
 
 
 def test_parse_drive_folders_valid() -> None:
-    raw = json.dumps({"みのり": "folder_id_1", "あきら": "folder_id_2"})
+    raw = json.dumps({"child_a": "folder_id_1", "child_b": "folder_id_2"})
     result = _parse_drive_folders(raw)
-    assert result == {"みのり": "folder_id_1", "あきら": "folder_id_2"}
+    assert result == {"child_a": "folder_id_1", "child_b": "folder_id_2"}
 
 
 def test_parse_drive_folders_single_child() -> None:
-    raw = json.dumps({"みのり": "abc123"})
-    assert _parse_drive_folders(raw) == {"みのり": "abc123"}
+    raw = json.dumps({"child_a": "abc123"})
+    assert _parse_drive_folders(raw) == {"child_a": "abc123"}
 
 
 def test_parse_drive_folders_invalid_json() -> None:

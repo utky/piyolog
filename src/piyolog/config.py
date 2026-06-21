@@ -10,7 +10,7 @@ class Config:
         self.bq_dataset_id: str = os.environ.get("BQ_DATASET_ID", "piyolog_raw")
         self.bq_table_id: str = os.environ.get("BQ_TABLE_ID", "export_files")
         # JSON mapping of child_name -> Drive folder ID
-        # e.g. '{"みのり": "folder_id_1", "あきら": "folder_id_2"}'
+        # e.g. '{"child_a": "folder_id_1", "child_b": "folder_id_2"}'
         self.drive_child_folders: dict[str, str] = _parse_drive_folders(
             _require_env("DRIVE_CHILD_FOLDERS")
         )
