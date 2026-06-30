@@ -3,7 +3,8 @@ terraform {
 
   required_providers {
     google = {
-      source = "hashicorp/google"
+      source  = "hashicorp/google"
+      version = "~> 6.0"
     }
   }
 
@@ -21,6 +22,7 @@ provider "google" {
   default_labels = {
     "environment" = "production"
     "managed-by"  = "terraform"
+    "repo"        = "piyolog"
     "app"         = "piyolog"
   }
 }
@@ -46,4 +48,5 @@ module "scheduler" {
   project_id = var.project_id
   region     = var.region
   job_name   = module.cloud_run_job.job_name
+  depends_on = [module.cloud_run_job]
 }

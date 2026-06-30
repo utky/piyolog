@@ -15,8 +15,12 @@ resource "google_bigquery_table" "export_files" {
   project             = var.project_id
   dataset_id          = google_bigquery_dataset.raw.dataset_id
   table_id            = var.table_id
-  deletion_protection = false
+  deletion_protection = true
   description         = "ぴよログ月次エクスポートファイルの全文保持テーブル"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 
   schema = jsonencode([
     {

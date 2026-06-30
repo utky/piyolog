@@ -43,5 +43,9 @@ jobs:
 
       # Cloud Run Jobs は :latest を push しても自動再取得しないため、
       # 同じイメージ参照で明示的に再デプロイする (Terraform apply は経由しない)
+      # ジョブが Terraform で未作成の場合 (初回 terraform apply 前) はスキップする
       - name: Redeploy Cloud Run Job with new image
-        run: gcloud run jobs update piyolog-raw-layer --region asia-northeast1 --image "$IMAGE"
+        run: |
+          gcloud run jobs describe piyolog-raw-layer --region asia-northeast1 --quiet 2>/dev/null \
+            && gcloud run jobs update piyolog-raw-layer --region asia-northeast1 --image "$IMAGE" \
+            || echo "Job not yet provisioned by Terraform, skipping redeploy"
