@@ -31,12 +31,8 @@ variable "table_id" {
 
 variable "drive_child_folders" {
   type        = string
-  description = "child_name -> Drive フォルダID の JSON マップ"
-  # NOTE: sensitive はterraform plan/apply CLI出力上の表示を抑えるのみ。
-  # Cloud Run Job では Secret Manager 経由ではない通常の env として渡るため、
-  # `gcloud run jobs describe` や Terraform state からは平文で参照できる。
-  # Drive フォルダIDは漏洩しても実害が小さいためこの運用で許容する。
-  sensitive = true
+  description = "child_name -> Drive フォルダID の JSON マップ (child_name に子供の個人名が入るため Secret Manager で管理)"
+  sensitive   = true
 }
 
 variable "log_level" {

@@ -19,6 +19,30 @@ resource "google_project_iam_member" "raw_layer_bigquery_job_user" {
   member  = "serviceAccount:${google_service_account.raw_layer.email}"
 }
 
+# DRIVE_CHILD_FOLDERS シークレット
+# child_name キーに子供の個人名が入るため Secret Manager で管理する。
+# secretmanager.googleapis.com の有効化は lofilab 側 tf で行う。
+resource "google_secret_manager_secret" "drive_child_folders" {
+  project   = var.project_id
+  secret_id = "${var.app_name}-drive-child-folders"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "drive_child_folders" {
+  secret      = google_secret_manager_secret.drive_child_folders.id
+  secret_data = var.drive_child_folders
+}
+
+resource "google_secret_manager_secret_iam_member" "raw_layer_accessor" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.drive_child_folders.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.raw_layer.email}"
+}
+
 # Cloud Run Job
 # Drive フォルダへのアクセスは IAM では付与できないため、
 # このSAのメールアドレスを Drive フォルダ側で手動共有設定する必要がある(運用手順)。
@@ -58,8 +82,13 @@ resource "google_cloud_run_v2_job" "raw_layer" {
         }
 
         env {
-          name  = "DRIVE_CHILD_FOLDERS"
-          value = var.drive_child_folders
+          name = "DRIVE_CHILD_FOLDERS"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.drive_child_folders.secret_id
+              version = "latest"
+            }
+          }
         }
 
         env {
@@ -69,4 +98,6 @@ resource "google_cloud_run_v2_job" "raw_layer" {
       }
     }
   }
+
+  depends_on = [google_secret_manager_secret_version.drive_child_folders]
 }
