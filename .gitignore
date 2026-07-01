@@ -15,3 +15,7 @@ dist-newstyle/
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
+
+# Claude
+.claude/worktrees/
+settings.local.json

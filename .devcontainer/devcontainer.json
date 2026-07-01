@@ -13,7 +13,10 @@
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
         "astral-sh.ty-vscode"
-      ]
+      ],
+      "settings": {
+        "python.terminal.activateEnvironment": false
+      }
     }
   },
   "postCreateCommand": ".devcontainer/install-tools.sh"
