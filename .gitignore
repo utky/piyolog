@@ -7,3 +7,11 @@ __pycache__/
 dist/
 *.egg-info/
 dist-newstyle/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example

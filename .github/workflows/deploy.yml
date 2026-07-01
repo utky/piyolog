@@ -1,0 +1,51 @@
+name: Build and Push Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/piyolog/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/deploy.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  IMAGE: asia-northeast1-docker.pkg.dev/lofilab/utky-applications/piyolog-raw-layer:latest
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: lofilab
+          workload_identity_provider: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+
+      - name: Build image
+        run: docker build -t "$IMAGE" .
+
+      - name: Push image
+        run: docker push "$IMAGE"
+
+      # Cloud Run Jobs は :latest を push しても自動再取得しないため、
+      # 同じイメージ参照で明示的に再デプロイする (Terraform apply は経由しない)
+      # ジョブが Terraform で未作成の場合 (初回 terraform apply 前) はスキップする
+      - name: Redeploy Cloud Run Job with new image
+        run: |
+          gcloud run jobs describe piyolog-raw-layer --region asia-northeast1 --quiet 2>/dev/null \
+            && gcloud run jobs update piyolog-raw-layer --region asia-northeast1 --image "$IMAGE" \
+            || echo "Job not yet provisioned by Terraform, skipping redeploy"

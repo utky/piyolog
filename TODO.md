@@ -10,41 +10,43 @@
 
 ---
 
-## デプロイ: raw 層 (Terraform IaC, 未着手)
+## デプロイ: raw 層 (Terraform IaC)
 
 参考実装: [utky/preschool-agent tf/](https://github.com/utky/preschool-agent/tree/18faa675a85f3271fa7307d52d98ba8392fd4c75/tf)
 (モジュール構成: `tf/modules/<concern>/` + `tf/environments/<env>/`、GCS バックエンドで state 管理)
 
-### 設計
+### 設計 (確定)
 
-- [ ] 必要なリソースを洗い出す (サービスアカウント, Cloud Run job, Artifact Registry, BQ データセット/テーブル, Cloud Scheduler, API 有効化など)。以降のタスクはこの洗い出し結果を前提に進める
-- [ ] [utky/lofilab](https://github.com/utky/lofilab) の共有リソース定義を確認し、再利用できるものを洗い出す
-  - Artifact Registry リポジトリ (`modules/repository`, 共有リポジトリ `utky-applications`)
-  - GitHub Actions 用 Workload Identity Federation + デプロイ用 SA (`modules/wif`)
-  - 必要 API の有効化 (`modules/service_api`)
-  - → raw 層専用にこれらを作り直す必要があるか、lofilab 側に追加・参照する形にするかを決める
-- [ ] Terraform ディレクトリ構成を決める (`tf/modules/{bigquery,cloud_run_job,scheduler}/`, `tf/environments/production/`)
-- [ ] tfstate の GCS バックエンド (バケット名・prefix) を決める
-  - 参考実装 (preschool-agent, lofilab) はいずれも `backend "gcs"` のコメントで「事前に手動で作成しておく必要があります」と明記されており、バケット自体を作成する Terraform コードはリポジトリ内に見当たらない → 手動 bootstrap が前提と判断できる
-  - 実際のバケットのラベル付け等の運用は GCP 側 (`gcloud storage buckets describe`) で確認が必要 (このリポジトリからは検証不可)
-- [ ] raw 層ジョブ用サービスアカウントの権限範囲を決める
-  - BigQuery: `roles/bigquery.dataEditor` + `roles/bigquery.jobUser` (参考実装の dbt SA 権限構成を踏襲)
-  - Drive: IAM ロールでは付与できないため、Drive フォルダ側で SA のメールアドレスを共有設定する運用を確定する (手動作業として明記)
-- [ ] コンテナイメージの配置先を決める。lofilab の共有 Artifact Registry (`utky-applications`) を使うか、raw 層専用リポジトリを作るか。ビルド/push 方法 (CI ワークフロー追加 or 手動 `docker build && push`) も決める
-- [ ] `google_cloud_run_v2_job` に渡す環境変数 (`BQ_PROJECT_ID` / `BQ_DATASET_ID` / `BQ_TABLE_ID` / `DRIVE_CHILD_FOLDERS` / `LOG_LEVEL`) の terraform 変数化方針を決める (`DRIVE_CHILD_FOLDERS` は JSON 文字列なので tfvars での扱いを確認)
-- [ ] BigQuery データセット/テーブルを Terraform 管理に含めるか、既存の手動作成物を import するかを決める
-- [ ] 定期実行の頻度を決める。ぴよログのデータは月次ファイルをまとめて取り込むだけなので、preschool-agent (6時間おき) ほどの頻度は不要。日次1回の Cloud Scheduler → Cloud Run Jobs API 直接呼び出し (単一ジョブのため Workflow 経由は不要) を基本方針とする
+- GCP プロジェクト: [utky/lofilab](https://github.com/utky/lofilab) が管理する既存プロジェクト `lofilab` を再利用する。`preschool-agent` も同プロジェクトを使っている。lofilab の `modules/service_api` には bigquery/run/cloudscheduler/iam を含む API 一覧が定義されているが、実際に `terraform apply` 済みかは lofilab 側のリポジトリ外からは確認できないため、`terraform apply` 時に API 未有効化エラーが出た場合は lofilab 側で `service_api` を適用し直す (このリポジトリの tf では API 有効化を行わない)
+- コンテナイメージ: lofilab 共有 Artifact Registry `utky-applications` を再利用 (`asia-northeast1-docker.pkg.dev/lofilab/utky-applications/piyolog-raw-layer`)。専用リポジトリは作らない
+- ビルド/push: GitHub Actions CI (`.github/workflows/deploy.yml`) で WIF 経由で自動 build/push する。Cloud Run Jobs は `:latest` push だけでは新イメージを再取得しないため、CI内で `gcloud run jobs update --image` による明示的な再デプロイも行う (Terraform apply は経由しない。Job自体の作成は最初の `terraform apply` が前提)
+  - lofilab 側の対応は完了済み: [utky/lofilab@b3961f1](https://github.com/utky/lofilab/commit/b3961f17ba0847dc2024d04e0be7c567b30d3364) (main ブランチ) で `github_repos` 変数の default に `"utky/piyolog"` が追加され、`tfvars` 運用自体も廃止された (secret を含まない値はコード管理に統一)。残作業はこのコードを lofilab 側で `terraform apply` して WIF provider/SA を実体化し、その出力値を piyolog 側の GitHub Actions repository variables に設定するだけ (下記「残りの作業」参照)
+- Terraform ディレクトリ構成: `tf/modules/{bigquery,cloud_run_job,scheduler}/` + `tf/environments/production/` (実装済み)
+- tfstate バックエンド: GCS バケット `lofilab-piyolog-tfstate` (preschool-agent の命名規則 `lofilab-<app>-tfstate` を踏襲)。バケット自体は Terraform 管理外、手動 bootstrap が前提 (参考実装と同様)
+- raw 層ジョブ用 SA の権限: `roles/bigquery.dataEditor` + `roles/bigquery.jobUser` (preschool-agent の dbt SA 構成を踏襲)。Drive アクセスは IAM では付与できないため、SA のメールアドレスを Drive フォルダ側で手動共有する運用とする
+- 環境変数: `BQ_PROJECT_ID` / `BQ_DATASET_ID` / `BQ_TABLE_ID` / `DRIVE_CHILD_FOLDERS` / `LOG_LEVEL` を `google_cloud_run_v2_job` に渡す。`DRIVE_CHILD_FOLDERS` は JSON 文字列の `sensitive` 変数として tfvars で管理 (リポジトリにはコミットしない。`terraform.tfvars.example` を参照用に用意)
+- BigQuery データセット/テーブル: Terraform (`tf/modules/bigquery/`) で事前 provision する。job 側 (`bq.py`) はテーブル存在確認のみで作成は行わない
+- 定期実行: 日次1回 (`0 6 * * * Asia/Tokyo`) の Cloud Scheduler → Cloud Run Jobs API (`:run` エンドポイント) 直接呼び出し。単一ジョブで引数オーバーライドが不要なため Cloud Workflows は使わず、Scheduler 専用 SA に `roles/run.invoker` を付与するだけで足りる
+
+### 実装 (完了)
+
+- [x] `tf/environments/production/{main,variables,outputs}.tf` + `terraform.tfvars.example`
+- [x] `tf/modules/bigquery/` (データセット + `export_files` テーブル定義。`bq.py` の `SCHEMA` と一致確認済み)
+- [x] `tf/modules/cloud_run_job/` (サービスアカウント, IAM, `google_cloud_run_v2_job`)
+- [x] `tf/modules/scheduler/` (日次 Cloud Scheduler → Cloud Run Jobs API 直接呼び出し用 SA と IAM)
+- [x] `.github/workflows/deploy.yml` (WIF 経由でイメージを build/push する CI)
+
+### 残りの作業 (適用・運用)
+
+- [ ] (ユーザー作業) GCS バケット `lofilab-piyolog-tfstate` を手動作成する
+- [ ] (ユーザー作業) lofilab を `terraform apply` し、`github_repos` の default 値 (`"utky/piyolog"` 追加済み, [b3961f1](https://github.com/utky/lofilab/commit/b3961f17ba0847dc2024d04e0be7c567b30d3364)) を反映させて WIF provider/SA を実体化する
+- [ ] (ユーザー作業) lofilab apply 後の出力 (`workload_identity_provider` / `service_account_email`) を、この piyolog リポジトリの GitHub Actions repository variables (`WORKLOAD_IDENTITY_PROVIDER` / `GCP_SERVICE_ACCOUNT_EMAIL`) に設定する
+- [ ] (ユーザー作業) `tf/environments/production/terraform.tfvars` を `terraform.tfvars.example` を参考に作成する (`drive_child_folders` を含む。コミットしない)
+- [ ] `terraform init` → `terraform plan` → `terraform apply` を実行し、BQ データセット/テーブル・Cloud Run job・Scheduler を作成する
+- [ ] CI を1回実行してイメージを push する (または手動 `docker build && push`)
+- [ ] (ユーザー作業) raw 層ジョブ用 SA (`raw_layer_service_account_email` output) を Drive の子供別フォルダに共有設定する
+- [ ] Cloud Scheduler を手動トリガーし、Cloud Run job が実際に raw 層への取り込みを完走することを確認する
 - [ ] 上記構成をもとに Google Cloud の費用を見積もる (Cloud Run job 実行時間課金, BigQuery ストレージ/クエリ, Artifact Registry ストレージ, Cloud Scheduler 等)
-
-### 実装
-
-- [ ] `tf/environments/production/{main,variables,outputs}.tf` + `terraform.tfvars` を作成し、GCS バックエンドを設定する
-- [ ] `tf/modules/bigquery/` を実装する (データセット + `export_files` テーブル定義)
-- [ ] `tf/modules/cloud_run_job/` を実装する (サービスアカウント, IAM, `google_cloud_run_v2_job` リソース)
-- [ ] `tf/modules/scheduler/` を実装する (日次 Cloud Scheduler → Cloud Run Jobs API 呼び出し用 SA と IAM)
-- [ ] (lofilab 再利用と決めた場合) lofilab 側に raw 層用の設定 (GitHub Actions 対象リポジトリ追加など) を追加する。専用作成と決めた場合は Artifact Registry リポジトリ作成 + イメージビルド/push の手順を CI またはスクリプトに落とす
-- [ ] Drive フォルダへの SA 共有設定を実施する (手動作業)
-- [ ] `terraform plan` → `terraform apply` を実行し、Cloud Run job が実際に raw 層への取り込みを完走することを確認する
 
 ---
 
