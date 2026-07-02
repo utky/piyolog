@@ -15,9 +15,14 @@
         "astral-sh.ty-vscode"
       ],
       "settings": {
-        "python.terminal.activateEnvironment": false
+        "python.terminal.activateEnvironment": false,
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python"
       }
     }
   },
-  "postCreateCommand": ".devcontainer/install-tools.sh"
+  "postCreateCommand": ".devcontainer/install-tools.sh",
+  "mounts": [
+    "source=gh-cli-config,target=/home/vscode/.config/gh,type=volume",
+    "source=gcloud-config,target=/home/vscode/.config/gcloud,type=volume"
+  ]
 }

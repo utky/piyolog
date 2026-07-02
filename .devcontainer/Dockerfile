@@ -9,3 +9,7 @@ RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dea
     apt-get update && \
     CLOUDSDK_SKIP_PY_COMPILATION=1 apt-get install -y google-cloud-cli && \
     rm -rf /var/lib/apt/lists/*
+
+# gh/gcloud の認証情報を named volume で永続化するためのマウント先を事前作成
+RUN mkdir -p /home/vscode/.config/gh /home/vscode/.config/gcloud && \
+    chown -R vscode:vscode /home/vscode/.config
