@@ -29,4 +29,4 @@ GitHub Actions → イメージ build/push + gcloud run jobs update
 - **初回起動前の安全弁**: ジョブが未作成の場合 (`terraform apply` 前) は `gcloud run jobs describe` で検出してスキップし、CI が 404 エラーで失敗しない
 
 ### `:latest` タグについて
-個人プロジェクトで実行回数も少なく、特定バージョンへのロールバック要件も現時点では存在しないため `:latest` で許容する。将来的に厳密なロールバックが必要になった場合は、コミット SHA タグ (`piyolog-raw-layer:abc1234`) に切り替え `gcloud run jobs update --image sha-tagged-image` を利用することで対応できる。
+個人プロジェクトで実行回数も少なく、特定バージョンへのロールバック要件も現時点では存在しないため `:latest` で許容する。将来的に厳密なロールバックが必要になった場合は、コミット SHA タグ (`piyolog-importer:abc1234`) に切り替え `gcloud run jobs update --image sha-tagged-image` を利用することで対応できる。

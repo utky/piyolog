@@ -1,5 +1,5 @@
 output "scheduler_name" {
-  value       = google_cloud_scheduler_job.raw_layer_daily.name
+  value       = google_cloud_scheduler_job.importer_daily.name
   description = "Cloud Scheduler Job名"
 }
 

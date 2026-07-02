@@ -18,7 +18,7 @@
 ### 設計 (確定)
 
 - GCP プロジェクト: [utky/lofilab](https://github.com/utky/lofilab) が管理する既存プロジェクト `lofilab` を再利用する。`preschool-agent` も同プロジェクトを使っている。lofilab の `modules/service_api` には bigquery/run/cloudscheduler/iam を含む API 一覧が定義されているが、実際に `terraform apply` 済みかは lofilab 側のリポジトリ外からは確認できないため、`terraform apply` 時に API 未有効化エラーが出た場合は lofilab 側で `service_api` を適用し直す (このリポジトリの tf では API 有効化を行わない)
-- コンテナイメージ: lofilab 共有 Artifact Registry `utky-applications` を再利用 (`asia-northeast1-docker.pkg.dev/lofilab/utky-applications/piyolog-raw-layer`)。専用リポジトリは作らない
+- コンテナイメージ: lofilab 共有 Artifact Registry `utky-applications` を再利用 (`asia-northeast1-docker.pkg.dev/lofilab/utky-applications/piyolog-importer`)。専用リポジトリは作らない
 - ビルド/push: GitHub Actions CI (`.github/workflows/deploy.yml`) で WIF 経由で自動 build/push する。Cloud Run Jobs は `:latest` push だけでは新イメージを再取得しないため、CI内で `gcloud run jobs update --image` による明示的な再デプロイも行う (Terraform apply は経由しない。Job自体の作成は最初の `terraform apply` が前提)
   - lofilab 側の対応は完了済み: [utky/lofilab@b3961f1](https://github.com/utky/lofilab/commit/b3961f17ba0847dc2024d04e0be7c567b30d3364) (main ブランチ) で `github_repos` 変数の default に `"utky/piyolog"` が追加され、`tfvars` 運用自体も廃止された (secret を含まない値はコード管理に統一)。残作業はこのコードを lofilab 側で `terraform apply` して WIF provider/SA を実体化し、その出力値を piyolog 側の GitHub Actions repository variables に設定するだけ (下記「残りの作業」参照)
 - Terraform ディレクトリ構成: `tf/modules/{bigquery,cloud_run_job,scheduler}/` + `tf/environments/production/` (実装済み)
@@ -44,7 +44,7 @@
 - [ ] (ユーザー作業) `tf/environments/production/terraform.tfvars` を `terraform.tfvars.example` を参考に作成する (`drive_child_folders` を含む。コミットしない)
 - [ ] `terraform init` → `terraform plan` → `terraform apply` を実行し、BQ データセット/テーブル・Cloud Run job・Scheduler を作成する
 - [ ] CI を1回実行してイメージを push する (または手動 `docker build && push`)
-- [ ] (ユーザー作業) raw 層ジョブ用 SA (`raw_layer_service_account_email` output) を Drive の子供別フォルダに共有設定する
+- [ ] (ユーザー作業) 取り込みジョブ用 SA (`importer_service_account_email` output) を Drive の子供別フォルダに共有設定する
 - [ ] Cloud Scheduler を手動トリガーし、Cloud Run job が実際に raw 層への取り込みを完走することを確認する
 - [ ] 上記構成をもとに Google Cloud の費用を見積もる (Cloud Run job 実行時間課金, BigQuery ストレージ/クエリ, Artifact Registry ストレージ, Cloud Scheduler 等)
 

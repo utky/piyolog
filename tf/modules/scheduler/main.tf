@@ -2,10 +2,10 @@
 resource "google_service_account" "scheduler" {
   project      = var.project_id
   account_id   = "${var.app_name}-scheduler-sa"
-  display_name = "Service Account for piyolog raw layer Cloud Scheduler"
+  display_name = "Service Account for piyolog importer Cloud Scheduler"
 }
 
-# Scheduler SA → raw層 Cloud Run Job の実行権限
+# Scheduler SA → 取り込み Cloud Run Job の実行権限
 # overrides を使わないため roles/run.developer ではなく roles/run.invoker で十分
 resource "google_cloud_run_v2_job_iam_member" "scheduler_invoker" {
   project  = var.project_id
@@ -17,9 +17,9 @@ resource "google_cloud_run_v2_job_iam_member" "scheduler_invoker" {
 
 # Cloud Scheduler: 日次1回、Cloud Run Jobs API を直接呼び出す
 # 単一ジョブ・引数オーバーライド不要のため Cloud Workflows は介さない
-resource "google_cloud_scheduler_job" "raw_layer_daily" {
-  name             = "${var.app_name}-raw-layer-daily"
-  description      = "piyolog raw層取り込みジョブを日次で実行"
+resource "google_cloud_scheduler_job" "importer_daily" {
+  name             = "${var.app_name}-importer-daily"
+  description      = "piyolog 取り込みジョブを日次で実行"
   schedule         = var.schedule
   time_zone        = var.time_zone
   region           = var.region

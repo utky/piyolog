@@ -16,7 +16,7 @@ variable "app_name" {
 
 variable "job_name" {
   type        = string
-  description = "raw層取り込み Cloud Run Job名"
+  description = "取り込み Cloud Run Job名"
 }
 
 variable "schedule" {

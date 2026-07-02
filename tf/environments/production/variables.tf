@@ -12,8 +12,8 @@ variable "region" {
 
 variable "container_image" {
   type        = string
-  description = "raw層取り込みジョブのコンテナイメージ"
-  default     = "asia-northeast1-docker.pkg.dev/lofilab/utky-applications/piyolog-raw-layer:latest"
+  description = "取り込みジョブのコンテナイメージ"
+  default     = "asia-northeast1-docker.pkg.dev/lofilab/utky-applications/piyolog-importer:latest"
 }
 
 variable "drive_child_folders" {

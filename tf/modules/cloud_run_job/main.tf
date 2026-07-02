@@ -1,22 +1,22 @@
-# raw層取り込みジョブ用サービスアカウント
-resource "google_service_account" "raw_layer" {
+# 取り込みジョブ用サービスアカウント
+resource "google_service_account" "importer" {
   project      = var.project_id
-  account_id   = "${var.app_name}-raw-layer-sa"
-  display_name = "Service Account for piyolog raw layer Cloud Run Job"
+  account_id   = "${var.app_name}-importer-sa"
+  display_name = "Service Account for piyolog importer Cloud Run Job"
 }
 
 # BigQuery データ編集権限
-resource "google_project_iam_member" "raw_layer_bigquery_data_editor" {
+resource "google_project_iam_member" "importer_bigquery_data_editor" {
   project = var.project_id
   role    = "roles/bigquery.dataEditor"
-  member  = "serviceAccount:${google_service_account.raw_layer.email}"
+  member  = "serviceAccount:${google_service_account.importer.email}"
 }
 
 # BigQuery ジョブ実行権限
-resource "google_project_iam_member" "raw_layer_bigquery_job_user" {
+resource "google_project_iam_member" "importer_bigquery_job_user" {
   project = var.project_id
   role    = "roles/bigquery.jobUser"
-  member  = "serviceAccount:${google_service_account.raw_layer.email}"
+  member  = "serviceAccount:${google_service_account.importer.email}"
 }
 
 # DRIVE_CHILD_FOLDERS シークレット
@@ -36,24 +36,24 @@ resource "google_secret_manager_secret_version" "drive_child_folders" {
   secret_data = var.drive_child_folders
 }
 
-resource "google_secret_manager_secret_iam_member" "raw_layer_accessor" {
+resource "google_secret_manager_secret_iam_member" "importer_accessor" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.drive_child_folders.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.raw_layer.email}"
+  member    = "serviceAccount:${google_service_account.importer.email}"
 }
 
 # Cloud Run Job
 # Drive フォルダへのアクセスは IAM では付与できないため、
 # このSAのメールアドレスを Drive フォルダ側で手動共有設定する必要がある(運用手順)。
-resource "google_cloud_run_v2_job" "raw_layer" {
-  name                = "${var.app_name}-raw-layer"
+resource "google_cloud_run_v2_job" "importer" {
+  name                = "${var.app_name}-importer"
   location            = var.region
   deletion_protection = false
 
   template {
     template {
-      service_account = google_service_account.raw_layer.email
+      service_account = google_service_account.importer.email
       timeout         = "300s"
 
       containers {

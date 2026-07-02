@@ -16,7 +16,7 @@ variable "app_name" {
 
 variable "container_image" {
   type        = string
-  description = "raw層取り込みジョブのコンテナイメージ"
+  description = "取り込みジョブのコンテナイメージ"
 }
 
 variable "dataset_id" {
