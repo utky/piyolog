@@ -38,14 +38,14 @@
 
 ### 残りの作業 (適用・運用)
 
-- [ ] (ユーザー作業) GCS バケット `lofilab-piyolog-tfstate` を手動作成する
-- [ ] (ユーザー作業) lofilab を `terraform apply` し、`github_repos` の default 値 (`"utky/piyolog"` 追加済み, [b3961f1](https://github.com/utky/lofilab/commit/b3961f17ba0847dc2024d04e0be7c567b30d3364)) を反映させて WIF provider/SA を実体化する
-- [ ] (ユーザー作業) lofilab apply 後の出力 (`workload_identity_provider` / `service_account_email`) を、この piyolog リポジトリの GitHub Actions repository variables (`WORKLOAD_IDENTITY_PROVIDER` / `GCP_SERVICE_ACCOUNT_EMAIL`) に設定する
-- [ ] (ユーザー作業) `tf/environments/production/terraform.tfvars` を `terraform.tfvars.example` を参考に作成する (`drive_child_folders` を含む。コミットしない)
-- [ ] `terraform init` → `terraform plan` → `terraform apply` を実行し、BQ データセット/テーブル・Cloud Run job・Scheduler を作成する
-- [ ] CI を1回実行してイメージを push する (または手動 `docker build && push`)
-- [ ] (ユーザー作業) 取り込みジョブ用 SA (`importer_service_account_email` output) を Drive の子供別フォルダに共有設定する
-- [ ] Cloud Scheduler を手動トリガーし、Cloud Run job が実際に raw 層への取り込みを完走することを確認する
+- [x] (ユーザー作業) GCS バケット `lofilab-piyolog-tfstate` を手動作成する
+- [x] (ユーザー作業) lofilab を `terraform apply` し、`github_repos` の default 値 (`"utky/piyolog"` 追加済み, [b3961f1](https://github.com/utky/lofilab/commit/b3961f17ba0847dc2024d04e0be7c567b30d3364)) を反映させて WIF provider/SA を実体化する
+- [x] (ユーザー作業) lofilab apply 後の出力 (`workload_identity_provider` / `service_account_email`) を、この piyolog リポジトリの GitHub Actions repository variables (`WORKLOAD_IDENTITY_PROVIDER` / `GCP_SERVICE_ACCOUNT_EMAIL`) に設定する
+- [x] (ユーザー作業) `tf/environments/production/terraform.tfvars` を `terraform.tfvars.example` を参考に作成する (`drive_child_folders` を含む。コミットしない)
+- [x] `terraform init` → `terraform plan` → `terraform apply` を実行し、BQ データセット/テーブル・Cloud Run job・Scheduler を作成する
+- [x] CI を1回実行してイメージを push する (または手動 `docker build && push`) (`Build and Push Image` run #28609790903, `asia-northeast1-docker.pkg.dev/lofilab/utky-applications/piyolog-importer` に push 済み)
+- [x] (ユーザー作業) 取り込みジョブ用 SA (`importer_service_account_email` output) を Drive の子供別フォルダに共有設定する (親フォルダ経由で共有)
+- [x] Cloud Scheduler を手動トリガーし、Cloud Run job が実際に raw 層への取り込みを完走することを確認する (2026-07-02, execution `piyolog-importer-kcggq`, 穂55件/慧12件を `piyolog_raw.export_files` に取り込み完了。なお lofilab 側で Drive API が無効化されていたため一度失敗し、有効化後に再実行して成功)
 - [ ] 上記構成をもとに Google Cloud の費用を見積もる (Cloud Run job 実行時間課金, BigQuery ストレージ/クエリ, Artifact Registry ストレージ, Cloud Scheduler 等)
 
 ---
