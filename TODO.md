@@ -45,24 +45,24 @@
 - [x] `terraform init` → `terraform plan` → `terraform apply` を実行し、BQ データセット/テーブル・Cloud Run job・Scheduler を作成する
 - [x] CI を1回実行してイメージを push する (または手動 `docker build && push`) (`Build and Push Image` run #28609790903, `asia-northeast1-docker.pkg.dev/lofilab/utky-applications/piyolog-importer` に push 済み)
 - [x] (ユーザー作業) 取り込みジョブ用 SA (`importer_service_account_email` output) を Drive の子供別フォルダに共有設定する (親フォルダ経由で共有)
-- [x] Cloud Scheduler を手動トリガーし、Cloud Run job が実際に raw 層への取り込みを完走することを確認する (2026-07-02, execution `piyolog-importer-kcggq`, 穂55件/慧12件を `piyolog_raw.export_files` に取り込み完了。なお lofilab 側で Drive API が無効化されていたため一度失敗し、有効化後に再実行して成功)
+- [x] Cloud Scheduler を手動トリガーし、Cloud Run job が実際に raw 層への取り込みを完走することを確認する (2026-07-02, execution `piyolog-importer-kcggq`, child_a 55件/child_b 12件を `piyolog_raw.export_files` に取り込み完了。なお lofilab 側で Drive API が無効化されていたため一度失敗し、有効化後に再実行して成功)
 - [ ] 上記構成をもとに Google Cloud の費用を見積もる (Cloud Run job 実行時間課金, BigQuery ストレージ/クエリ, Artifact Registry ストレージ, Cloud Scheduler 等)
+  - 保留: 実際の billing console にデータが蓄積されてから見積もる
 
 ---
 
-## 事前準備 (ユーザー作業)
+## 事前準備 (ユーザー作業) ✅ 完了
 
-- [ ] Drive 上のぴよログファイルを子供別サブフォルダへ移動
-  - 現状: 単一フォルダ `1BDMCTkCaFEbskGeIGKDzWuUdsb86ME7R` に直置き
-  - 移動先構成: `ぴよログ/<child_name>/【ぴよログ】YYYY年M月.txt`
+- [x] Drive 上のぴよログファイルを子供別サブフォルダへ移動
 
 ---
 
-## フェーズ2: 種別棚卸し
+## フェーズ2: 種別棚卸し ✅ 完了(2026-07-03)
 
-- [ ] BQ の `raw_content` から全期間・全子供の種別を抽出するクエリ/スクリプトを書く
-- [ ] 抽出した種別の和集合を確定し、既知種別リスト (`docs/known_event_types.md` 等) として文書化する
-- [ ] `overview.md` §5.3 の暫定種別グループを確定版で更新する
+- [x] BQ の `raw_content` から全期間・全子供の種別を抽出するクエリ/スクリプトを書く (`sql/analysis/extract_event_types.sql`)
+- [x] 抽出した種別の和集合を確定し、既知種別リスト (`docs/known_event_types.md`) として文書化する
+- [x] `overview.md` §5.3 の暫定種別グループを確定版で更新する
+- [x] (副産物) イベント開始行の区切り文字がドキュメント記載のタブ (`\t`) ではなく半角スペースだったことが判明したため、関連ドキュメント (`overview.md`, `piyolog_raw_layer_spec.md`, dbt SKILL.md) を実データに合わせて修正
 
 ---
 
@@ -74,7 +74,7 @@
 - [ ] `stg_daily_header` モデルを実装する (粒度: 日次1レコード)
 - [ ] `stg_events` モデルを実装する (粒度: イベント1レコード)
   - 状態機械パース (HEADER → EVENTS → SUMMARY → NOTES)
-  - イベント開始行判定: `^\d{1,2}:\d{2}\t`
+  - イベント開始行判定: `^\d{1,2}:\d{2}\s+`(半角スペース区切り。タブは実データに存在しない)
   - EVENTS 終了マーカー: `母乳合計`
   - SUMMARY 終了マーカー: `うんち合計`
   - 複数行詳細テキストの `detail_raw` への追記
@@ -86,12 +86,12 @@
 
 ## フェーズ4: intermediate - 種別ごとテーブル (スキーマ設計 TODO)
 
-- [ ] 確定した種別リストをもとに種別ごとテーブルのスキーマを設計する
+- [ ] 確定した種別リスト (`docs/known_event_types.md`) をもとに種別ごとテーブルのスキーマを設計する
 - [ ] `stg_events` から種別ごとに分割する dbt モデルを実装する
-  - 数値/量型: 体温, のみもの, ミルク, 搾乳/搾母乳
+  - 数値/量型: 体温, のみもの, ミルク, 搾乳/搾母乳, 体重, 身長, 頭囲
   - 状態型: 起きる, 寝る, おしっこ, うんち
   - 授乳型: 母乳 (複数フォーマット対応)
-  - 自由記述型: 離乳食, ごはん, おやつ, さんぽ, 病院, 幼稚園, その他
+  - 自由記述型: 離乳食, ごはん, おやつ, さんぽ, 行き先イベント, 病院, 幼稚園, その他, お風呂, 白湯, 吐く, けが, せき, 予防接種
   - トレーニング型: マイオブレース (🔴△❌)
   - ルーティン型: 生活習慣, スキンケア, くすり, ミルトン交換
   - 発達記録型: できた
