@@ -19,3 +19,11 @@ dist-newstyle/
 # Claude
 .claude/worktrees/
 settings.local.json
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/profiles.yml
+!dbt/profiles.yml.example
+dbt/.user.yml

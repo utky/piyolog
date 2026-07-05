@@ -1,0 +1,26 @@
+name: "piyolog"
+version: "1.0.0"
+config-version: 2
+
+profile: "piyolog"
+
+model-paths: ["models"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# profiles.yml の dataset (既定 "piyolog") と +schema を dbt 標準の
+# generate_schema_name ("<dataset>_<schema>") で連結し、piyolog_staging /
+# piyolog_intermediate / piyolog_marts データセットに振り分ける。
+models:
+  piyolog:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table
