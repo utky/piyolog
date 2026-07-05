@@ -13,6 +13,7 @@ dev = [
     "pytest>=8.0",
     "pytest-mock>=3.14",
     "ruff>=0.6",
+    "dbt-bigquery>=1.8",
 ]
 
 [build-system]

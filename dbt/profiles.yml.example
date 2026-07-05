@@ -1,0 +1,27 @@
+# dbt の接続設定テンプレート。
+#
+# 実際の profiles.yml は秘匿情報を含まないが (認証は ADC 経由)、環境差分を
+# 避けるためリポジトリにはコミットしない。以下のいずれかの方法で配置する:
+#
+#   1. このファイルを ~/.dbt/profiles.yml にコピーする
+#   2. このファイルを dbt/profiles.yml にコピーし、`--profiles-dir dbt` を付けて実行する
+#      (例: uv run dbt run --project-dir dbt --profiles-dir dbt)
+#
+# 認証は src/piyolog/bq.py の bigquery.Client() と同様に ADC (Application Default
+# Credentials) を利用する。ローカルでは `GOOGLE_APPLICATION_CREDENTIALS` にサービス
+# アカウント JSON のパスを設定するか、`gcloud auth application-default login` を実行する。
+
+piyolog:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('BQ_PROJECT_ID') }}"
+      # 実際の書き込み先は各モデルの +schema (dbt_project.yml) で piyolog_staging /
+      # piyolog_intermediate / piyolog_marts に振り分けられる。ここでの値はその
+      # ベース名。raw 層取り込みジョブの BQ_DATASET_ID (既定 piyolog_raw) とは
+      # 別概念なので env var は共有しない。
+      dataset: piyolog
+      location: asia-northeast1
+      threads: 4

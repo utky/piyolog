@@ -1,0 +1,23 @@
+version: 2
+
+sources:
+  - name: piyolog_raw
+    description: Cloud Run job が Google Drive から取り込む raw 層。dbt の管理外 (job が書き込む)。
+    database: "{{ env_var('BQ_PROJECT_ID') }}"
+    schema: "{{ env_var('BQ_DATASET_ID', 'piyolog_raw') }}"
+    tables:
+      - name: export_files
+        description: 1 ファイル (子供 × 月) につき 1 レコード。raw_content にテキスト全文を保持する。
+        columns:
+          - name: child_name
+            description: 子供の識別子 (Drive フォルダ名に対応)
+          - name: source_year_month
+            description: エクスポート対象月の月初日 (DATE)
+          - name: file_name
+            description: Drive 上の元ファイル名
+          - name: drive_file_id
+            description: Drive ファイル ID
+          - name: raw_content
+            description: エクスポートされたテキストの全文
+          - name: loaded_at
+            description: BQ への取り込み時刻 (UTC)
