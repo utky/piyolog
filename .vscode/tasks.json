@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "opentofu: init",
+      "type": "shell",
+      "command": "tofu init",
+      "options": {
+        "cwd": "${workspaceFolder}/tf/environments/production"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "opentofu: validate",
+      "type": "shell",
+      "command": "tofu validate",
+      "options": {
+        "cwd": "${workspaceFolder}/tf/environments/production"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "opentofu: plan",
+      "type": "shell",
+      "command": "tofu plan",
+      "options": {
+        "cwd": "${workspaceFolder}/tf/environments/production"
+      },
+      "dependsOn": ["opentofu: validate"],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "opentofu: apply",
+      "type": "shell",
+      "command": "tofu apply",
+      "options": {
+        "cwd": "${workspaceFolder}/tf/environments/production"
+      },
+      "dependsOn": ["opentofu: validate"],
+      "problemMatcher": []
+    }
+  ]
+}
