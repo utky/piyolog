@@ -61,3 +61,34 @@ resource "google_bigquery_table" "export_files" {
     },
   ])
 }
+
+# dbt が生成するテーブル/ビューの器としてのデータセット。
+# 実体 (テーブル/ビュー) は dbt run が管理するため、ここではデータセットのみ
+# 事前 provision する。raw層と異なり dbt で再生成可能なため destroy 時の
+# コンテンツ保護は行わない。
+resource "google_bigquery_dataset" "staging" {
+  project                    = var.project_id
+  dataset_id                 = var.staging_dataset_id
+  friendly_name              = "piyolog staging layer"
+  description                = "dbt staging層 (raw から型付け・整形した中間データ)"
+  location                   = var.location
+  delete_contents_on_destroy = true
+}
+
+resource "google_bigquery_dataset" "intermediate" {
+  project                    = var.project_id
+  dataset_id                 = var.intermediate_dataset_id
+  friendly_name              = "piyolog intermediate layer"
+  description                = "dbt intermediate層 (種別ごとテーブル・区間データ等)"
+  location                   = var.location
+  delete_contents_on_destroy = true
+}
+
+resource "google_bigquery_dataset" "marts" {
+  project                    = var.project_id
+  dataset_id                 = var.marts_dataset_id
+  friendly_name              = "piyolog marts layer"
+  description                = "dbt marts層 (用途特化の最終出力)"
+  location                   = var.location
+  delete_contents_on_destroy = true
+}

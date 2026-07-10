@@ -71,7 +71,8 @@
 目標テーブル: `stg_daily_header` / `stg_events` / `stg_daily_notes`
 
 - [x] dbt プロジェクトを初期化する (`dbt/` 配下。dbt-bigquery を dev 依存に追加、profile の dataset (`piyolog`) + 各レイヤーの `+schema` (dbt標準の `generate_schema_name` で連結) でデータセットを分割、raw source 定義済み。staging/intermediate/marts の実モデルは未実装)
-- [ ] `piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットを Terraform (`tf/modules/bigquery/`) で事前 provision する (現状 raw のみ。実モデル実装前に対応する)
+- [x] `piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットの Terraform コードを実装する (`tf/modules/bigquery/`。dbt が実体テーブル/ビューを管理するため `delete_contents_on_destroy = true`。raw層とは異なり destroy 時のコンテンツ保護は行わない)
+- [ ] (ユーザー作業) 上記 `terraform apply` を実行し、`piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットを実際に作成する
 - [ ] `stg_daily_header` モデルを実装する (粒度: 日次1レコード)
 - [ ] `stg_events` モデルを実装する (粒度: イベント1レコード)
   - 状態機械パース (HEADER → EVENTS → SUMMARY → NOTES)
