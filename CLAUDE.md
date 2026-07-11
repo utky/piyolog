@@ -17,12 +17,20 @@
 
 ```bash
 uv sync --extra dev          # 依存インストール
-uv run ruff check .          # lint
-uv run ruff format .         # フォーマット
+uv run ruff check .          # lint (Python)
+uv run ruff format .         # フォーマット (Python)
+uv run sqlfluff lint dbt/models dbt/tests sql/analysis  # lint (SQL)
+uv run sqlfluff fix dbt/models dbt/tests sql/analysis   # 自動修正 (SQL)
 uv run pytest --tb=short     # テスト
 uv run pytest tests/test_drive.py::test_xxx -v  # 単一テスト
 uv run python -m piyolog.main  # ジョブ実行(要環境変数)
 ```
+
+SQL lint は sqlfluff の jinja テンプレータ(`apply_dbt_builtins`)を使い、BigQuery 認証情報
+なしで実行できる(`.sqlfluff` 参照)。CI (`ci.yml`) は `ruff check` / `ruff format --check` /
+`sqlfluff lint` / `pytest` の4点を毎回実行する。dbt モデル・UDF・SQL分析スクリプトを追加/変更
+した際は、コミット前にローカルで `uv run sqlfluff lint dbt/models dbt/tests sql/analysis` を
+通しておくこと。
 
 Docker イメージビルド:
 

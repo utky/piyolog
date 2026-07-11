@@ -23,8 +23,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Lint (ruff)
+      - name: Lint (ruff check)
         run: uv run ruff check .
+
+      - name: Lint (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Lint (sqlfluff)
+        run: uv run sqlfluff lint dbt/models dbt/tests sql/analysis
 
       - name: Run tests
         run: uv run pytest --tb=short
