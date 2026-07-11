@@ -66,30 +66,32 @@
 
 ---
 
-## フェーズ3: staging (仕様確定・実装 TODO)
+## フェーズ3: staging ✅ 実装完了(BigQuery Python UDF方式)
 
-目標テーブル: `stg_daily_header` / `stg_events` / `stg_daily_notes`
+目標モデル: `stg_piyolog__daily_headers` / `stg_piyolog__events` / `stg_piyolog__daily_notes`。
+パースは Cloud Run job ではなく BigQuery Python UDF (`parse_piyolog_export`) で行い、
+dbt/BigQuery に完結させる方式に変更した ([ADR-0009](docs/adr/0009-bq-python-udf-parsing.md)、
+仕様は `docs/piyolog_staging_layer_spec.md`)。
 
-- [x] dbt プロジェクトを初期化する (`dbt/` 配下。dbt-bigquery を dev 依存に追加、profile の dataset (`piyolog`) + 各レイヤーの `+schema` (dbt標準の `generate_schema_name` で連結) でデータセットを分割、raw source 定義済み。staging/intermediate/marts の実モデルは未実装)
-- [x] `piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットの Terraform コードを実装する (`tf/modules/bigquery/`。dbt が実体テーブル/ビューを管理するため `delete_contents_on_destroy = true`。raw層とは異なり destroy 時のコンテンツ保護は行わない)
-- [ ] (ユーザー作業) 上記 `terraform apply` を実行し、`piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットを実際に作成する
-- [ ] `stg_daily_header` モデルを実装する (粒度: 日次1レコード)
-- [ ] `stg_events` モデルを実装する (粒度: イベント1レコード)
-  - 状態機械パース (HEADER → EVENTS → SUMMARY → NOTES)
-  - イベント開始行判定: `^\d{1,2}:\d{2}\s+`(半角スペース区切り。タブは実データに存在しない)
-  - EVENTS 終了マーカー: `母乳合計`
-  - SUMMARY 終了マーカー: `うんち合計`
-  - 複数行詳細テキストの `detail_raw` への追記
-- [ ] `stg_daily_notes` モデルを実装する (粒度: 日次1レコード)
-- [ ] 照合キー `(source_year_month, log_date)` のユニーク制約テストを追加する
-- [ ] 未知種別が出た場合に警告/エラーで検知する仕組みを実装する (方針P)
+- [x] dbt プロジェクトを初期化する (`dbt/` 配下)
+- [x] `piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットの Terraform コードを実装する (`tf/modules/bigquery/`)
+- [x] (ユーザー作業) 上記 `terraform apply` を実行し、`piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットを実際に作成する (2026-07-11, `bq ls --project_id=lofilab` で3データセットの存在を確認済み。中身は空、dbt build 未実施)
+- [x] ADR-0009 を作成する (BigQuery Python UDF によるパースの dbt/BigQuery 完結化)
+- [x] `dbt/functions/parse_piyolog_export.py` / `.yml` を実装する (状態機械パース、STRUCT戻り値)
+- [x] `tests/test_parse.py` を実装する (モックなしユニットテスト)
+- [x] `stg_piyolog__daily_headers` / `stg_piyolog__events` / `stg_piyolog__daily_notes` モデルを実装する (UDF呼び出し + UNNEST)
+- [x] `daily_header_id` (サロゲートキー) のユニーク制約テスト、`events` の `(daily_header_id, event_seq)` 複合一意性テストを追加する
+- [x] 未知種別が出た場合に警告で検知する仕組みを実装する (方針P。`event_type_raw` への `accepted_values` テスト、severity: warn)
+- [x] `docs/overview.md` / `docs/piyolog_staging_layer_spec.md` / `.claude/skills/dbt/SKILL.md` を更新する
+- [ ] (ユーザー作業・要 BQ 認証情報) `uv run dbt build` を実行し、UDF のデプロイと3モデルのビルド・テストが通ることを確認する
+  - 未検証のリスク: 素の Python UDF に Cloud Resource Connection が必要かどうか、`runtime_version: "3.12"` が対応しているか
 
 ---
 
 ## フェーズ4: intermediate - 種別ごとテーブル (スキーマ設計 TODO)
 
 - [ ] 確定した種別リスト (`docs/known_event_types.md`) をもとに種別ごとテーブルのスキーマを設計する
-- [ ] `stg_events` から種別ごとに分割する dbt モデルを実装する
+- [ ] `stg_piyolog__events` から種別ごとに分割する dbt モデルを実装する
   - 数値/量型: 体温, のみもの, ミルク, 搾乳/搾母乳, 体重, 身長, 頭囲
   - 状態型: 起きる, 寝る, おしっこ, うんち
   - 授乳型: 母乳 (複数フォーマット対応)
