@@ -56,7 +56,7 @@ raw層に限定した実装指示は別ドキュメント(`piyolog_raw_layer_spe
    ▼
 [BigQuery: raw]   テキスト全文を1ファイル1レコードで保持
    │  ▲ パースロジック改善時はここから再パース(Drive再アクセス不要)
-   │  dbt
+   │  dbt(BigQuery Python UDF `parse_piyolog_export` を呼び出して状態機械パース)
    ▼
 [BigQuery: staging]  行レベルにパースした生レコード(正規化)
    │  dbt
@@ -91,6 +91,7 @@ raw層に限定した実装指示は別ドキュメント(`piyolog_raw_layer_spe
 | [0005](adr/0005-python-parse.md) | パース処理は BQ 完結を断念し Python で実施 |
 | [0006](adr/0006-no-daily-summary-storage.md) | 日次集計フッターは BQ に保持せず都度集計 |
 | [0007](adr/0007-child-separation-by-drive-folder.md) | 子供の区別は Drive フォルダで行う |
+| [0009](adr/0009-bq-python-udf-parsing.md) | staging層のパースは BigQuery Python UDF で実施し dbt に統合する(ADR-0005 改訂) |
 
 ---
 
@@ -104,18 +105,26 @@ dbt のレイヤリング慣習に沿う。staging はソースに対する薄�
 - スキーマ: `child_name`, `source_year_month`(DATE, 月初日), `file_name`, `drive_file_id`, `raw_content`, `loaded_at`。
 - 洗い替え単位: `(child_name, source_year_month)`。
 
-### 5.2 staging(行レベル, 正規化) ※方針確定・実装は今後
+### 5.2 staging(行レベル, 正規化) ※実装済み
 
-raw の `raw_content` を状態機械でパースし、出現単位に応じてテーブルを分離する。**なるべく生データを残す**。
+raw の `raw_content` を **BigQuery Python UDF `parse_piyolog_export`** で状態機械パースし、
+出現単位に応じてテーブルを分離する。**なるべく生データを残す**。パース処理は Cloud Run job
+ではなく dbt/BigQuery に完結する([ADR-0009](adr/0009-bq-python-udf-parsing.md)、
+実装指示は `piyolog_staging_layer_spec.md` を参照)。
 
 | テーブル | 粒度 | 主なカラム |
 |---|---|---|
-| `stg_daily_header` | 日次1レコード | source_year_month, log_date, child_name, child_age_raw |
-| `stg_events` | イベント1レコード | source_year_month, log_date, event_seq, event_time, event_type_raw, detail_raw |
-| `stg_daily_notes` | 日次1レコード | source_year_month, log_date, note_raw |
+| `stg_piyolog__daily_headers` | 日次1レコード | daily_header_id, child_name, source_year_month, log_date, child_age_raw |
+| `stg_piyolog__events` | イベント1レコード | daily_header_id, event_seq, event_at, event_type_raw, detail_raw |
+| `stg_piyolog__daily_notes` | 日次1レコード(メモがある日のみ) | daily_header_id, note_raw |
 
-- 照合キー: `(source_year_month, log_date)`。1ファイル=1子供のため child_name はキーに不要。
-- child_name / 年齢はファイル・日次に1回しか出ないので、イベント行ごとには持たせない(正規化)。必要時はヘッダーと結合。
+- 照合キー: `daily_header_id`(`{child_name}:{log_date}` のサロゲートキー)。複数の子供の
+  データが1テーブルに集約されるため、`(source_year_month, log_date)` だけでは一意にならない
+  (child_a と child_b が同じ月に同じ log_date を持ちうる)。`events` は
+  `(daily_header_id, event_seq)` が一意。
+- `events` は時系列データとして単体で日付フィルタできるよう、`event_time` 単体ではなく
+  `log_date` と時刻を合成した `event_at`(DATETIME、現地時刻・タイムゾーンなし)を持つ。
+- child_name / 年齢はファイル・日次に1回しか出ないので、イベント行ごとには持たせない(正規化)。必要時は `daily_header_id` でヘッダーと結合。
 
 #### パース状態機械(確定仕様)
 
@@ -128,11 +137,19 @@ raw の `raw_content` を状態機械でパースし、出現単位に応じて�
 3. **SUMMARY**: `母乳合計` 行〜`うんち合計` 行。間の項目数は可変(`搾母乳合計` 等が入りうる)。BQには保持せず読み飛ばす。
 4. **NOTES**: `うんち合計` 行の次行〜セクション末尾。全文を `note_raw` として収集(`【見出し】` 含む)。
 
+#### 未知種別の扱い(方針P)
+
+UDF 側では検知しない。`stg_piyolog__events.event_type_raw` に対する dbt の
+`accepted_values` スキーマテスト(severity: warn、値は `docs/known_event_types.md` の
+33種別)を検知の仕組みとする。`dbt build`/`dbt test` の実行結果自体が品質ゲートになる。
+未知種別を `その他` へ寄せる変換は intermediate 層(5.3)の責務とし、staging では
+`event_type_raw` を生テキストのまま保持する。
+
 ### 5.3 intermediate(種別ごと + 区間) ※一部方針確定・設計は今後
 
 #### 種別ごとテーブル(タイプ別)
 
-`stg_events` を既知種別ごとに分割。各種別固有スキーマで `detail_raw` を構造化する。
+`stg_piyolog__events` を既知種別ごとに分割。各種別固有スキーマで `detail_raw` を構造化する。
 
 確認済みの種別グループ(全期間・子供2名の全ファイルから抽出。詳細は `docs/known_event_types.md` を参照):
 
@@ -185,7 +202,7 @@ raw の `raw_content` を状態機械でパースし、出現単位に応じて�
 |---|---|---|
 | 1. raw層 | Drive API 読み取り + BQ raw テーブル(Cloud Run job, Python) | 仕様確定・実装指示書あり(別ドキュメント) |
 | 2. 種別棚卸し | BQ 上の raw_content から全期間の種別を抽出・和集合を確定 | 完了(`docs/known_event_types.md`) |
-| 3. staging | 状態機械パース → header / events / notes の3テーブル | 仕様確定・実装TODO |
+| 3. staging | 状態機械パース(BigQuery Python UDF) → daily_headers / events / daily_notes の3モデル | 実装済み |
 | 4. intermediate(種別) | タイプ別テーブルへ分割、詳細構造化 | スキーマ設計TODO |
 | 5. intermediate(区間) | sleep_intervals 等、enrich | 設計TODO |
 | 6. marts | 用途特化マート | 用途確定後 |
@@ -207,18 +224,18 @@ raw の `raw_content` を状態機械でパースし、出現単位に応じて�
 | スマホ→クラウド | Drive API 直読み → [ADR-0002](adr/0002-drive-api-direct-read.md) |
 | raw層 | テキスト全文を BQ 保持 → [ADR-0003](adr/0003-raw-layer-full-text-bq.md) |
 | 取り込みジョブ | Cloud Run jobs → [ADR-0004](adr/0004-cloud-run-jobs.md) |
-| パース実行場所 | Python 手続き処理 → [ADR-0005](adr/0005-python-parse.md) |
+| パース実行場所 | Python 手続き処理、BigQuery Python UDF として dbt に統合 → [ADR-0005](adr/0005-python-parse.md) / [ADR-0009](adr/0009-bq-python-udf-parsing.md) |
 | 日次集計フッター | BQ に保持しない → [ADR-0006](adr/0006-no-daily-summary-storage.md) |
 | 子供の区別 | Drive フォルダで分離 → [ADR-0007](adr/0007-child-separation-by-drive-folder.md) |
 | 日次メモ | `daily_notes` として別テーブル保持、全文検索あり（シンプル方針） |
-| 種別リスト方針 | 方針P（既知種別を固定定義、未知は警告検知） |
+| 種別リスト方針 | 方針P（既知種別を固定定義、未知は警告検知。staging では dbt の accepted_values テストで実装） |
 | 睡眠 staging | 方針X（イベントを生のまま1行） |
 | 睡眠 intermediate | 方針Y（区間データへ変換） |
-| staging のテーブル分割 | header / events / notes に正規化分離 |
-| 照合キー(staging) | `(source_year_month, log_date)` |
+| staging のテーブル分割 | daily_headers / events / daily_notes に正規化分離 |
+| 照合キー(staging) | `daily_header_id`(`{child_name}:{log_date}` サロゲートキー)。events は `(daily_header_id, event_seq)` |
 | パース終了マーカー | EVENTS終了= `母乳合計`、SUMMARY終了= `うんち合計` |
 | イベント開始行判定 | 行頭 `^\d{1,2}:\d{2}\s+`(実データはスペース区切り。タブは存在しない) |
-| 洗い替え単位 | `(child_name, source_year_month)` |
+| 洗い替え単位(raw) | `(child_name, source_year_month)` |
 | 実装言語 | Python |
 | `source_year_month` 型 | DATE（月初日） |
 
@@ -227,3 +244,4 @@ raw の `raw_content` を状態機械でパースし、出現単位に応じて�
 ## 9. 関連ドキュメント
 
 - `piyolog_raw_layer_spec.md`: raw層に限定した実装指示書(別セッションでの実装用)。
+- `piyolog_staging_layer_spec.md`: staging層に限定した実装指示書(BigQuery Python UDF・状態機械・3モデルの詳細仕様)。

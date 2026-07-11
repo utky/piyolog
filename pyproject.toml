@@ -13,7 +13,7 @@ dev = [
     "pytest>=8.0",
     "pytest-mock>=3.14",
     "ruff>=0.6",
-    "dbt-bigquery>=1.8",
+    "dbt-bigquery>=1.11",
 ]
 
 [build-system]
@@ -32,3 +32,6 @@ select = ["E", "F", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# dbt/functions/*.py are self-contained BigQuery Python UDF bodies (no local
+# package imports allowed there); expose them as top-level modules for tests.
+pythonpath = ["dbt/functions"]

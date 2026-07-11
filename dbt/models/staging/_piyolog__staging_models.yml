@@ -1,0 +1,89 @@
+version: 2
+
+models:
+  - name: stg_piyolog__daily_headers
+    description: 日次1レコード。parse_piyolog_export UDF が raw_content を状態機械パースした結果の headers 配列を展開したもの。
+    columns:
+      - name: daily_header_id
+        description: "`{child_name}:{log_date}` のサロゲートキー。複数の子供のデータが1テーブルに集約されても衝突しない。"
+        tests:
+          - unique
+          - not_null
+      - name: child_name
+        tests:
+          - not_null
+      - name: log_date
+        tests:
+          - not_null
+
+  - name: stg_piyolog__events
+    description: イベント1レコード。parse_piyolog_export UDF が raw_content を状態機械パースした結果の events 配列を展開したもの。
+    columns:
+      - name: daily_header_id
+        description: stg_piyolog__daily_headers への外部キー
+        tests:
+          - not_null
+      - name: event_seq
+        description: 日内の出現順(0始まり)
+        tests:
+          - not_null
+      - name: event_at
+        tests:
+          - not_null
+      - name: event_type_raw
+        description: >
+          種別の生テキスト。方針P(既知種別を固定定義し未知種別は警告で検知)に基づき、
+          docs/known_event_types.md の33種別に対する accepted_values テスト(warn)で
+          未知種別を検知する。既知リストへの追加はフェーズ4(intermediate)側の判断で行う。
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - "おしっこ"
+                  - "寝る"
+                  - "起きる"
+                  - "母乳"
+                  - "離乳食"
+                  - "体温"
+                  - "その他"
+                  - "ミルク"
+                  - "うんち"
+                  - "さんぽ"
+                  - "生活習慣"
+                  - "お風呂"
+                  - "行き先イベント"
+                  - "のみもの"
+                  - "くすり"
+                  - "スキンケア"
+                  - "おやつ"
+                  - "マイオブレース"
+                  - "ごはん"
+                  - "ミルトン交換"
+                  - "幼稚園"
+                  - "できた"
+                  - "搾乳"
+                  - "病院"
+                  - "白湯"
+                  - "搾母乳"
+                  - "体重"
+                  - "吐く"
+                  - "身長"
+                  - "予防接種"
+                  - "頭囲"
+                  - "けが"
+                  - "せき"
+              config:
+                severity: warn
+
+  - name: stg_piyolog__daily_notes
+    description: 日次1レコード(メモがある日のみ)。parse_piyolog_export UDF が raw_content を状態機械パースした結果の notes 配列を展開したもの。
+    columns:
+      - name: daily_header_id
+        description: stg_piyolog__daily_headers への外部キー
+        tests:
+          - unique
+          - not_null
+      - name: note_raw
+        tests:
+          - not_null

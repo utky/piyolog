@@ -1,0 +1,37 @@
+functions:
+  - name: parse_piyolog_export
+    description: >
+      ぴよログ月次エクスポートの raw_content を状態機械でパースし、daily_headers/events/daily_notes
+      相当の行データを STRUCT で返す(状態機械: HEADER → EVENTS → SUMMARY → NOTES)。
+    arguments:
+      - name: raw_content
+        data_type: string
+      - name: child_name
+        data_type: string
+      - name: source_year_month
+        data_type: date
+    returns:
+      data_type: >
+        STRUCT<
+          headers ARRAY<STRUCT<
+            daily_header_id STRING,
+            child_name STRING,
+            source_year_month DATE,
+            log_date DATE,
+            child_age_raw STRING
+          >>,
+          events ARRAY<STRUCT<
+            daily_header_id STRING,
+            event_seq INT64,
+            event_at DATETIME,
+            event_type_raw STRING,
+            detail_raw STRING
+          >>,
+          notes ARRAY<STRUCT<
+            daily_header_id STRING,
+            note_raw STRING
+          >>
+        >
+    config:
+      entry_point: parse_piyolog_export
+      runtime_version: "3.12"
