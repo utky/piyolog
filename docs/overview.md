@@ -91,6 +91,8 @@ raw層に限定した実装指示は別ドキュメント(`piyolog_raw_layer_spe
 | [0005](adr/0005-python-parse.md) | パース処理は BQ 完結を断念し Python で実施 |
 | [0006](adr/0006-no-daily-summary-storage.md) | 日次集計フッターは BQ に保持せず都度集計 |
 | [0007](adr/0007-child-separation-by-drive-folder.md) | 子供の区別は Drive フォルダで行う |
+| [0008](adr/0008-ci-image-update-strategy.md) | CI によるイメージ更新戦略(Terraform 外のデプロイ) |
+| [0009](adr/0009-staging-parse-bigquery-python-udf.md) | staging層のパースは BigQuery Python UDF で実装する |
 
 ---
 
@@ -108,14 +110,16 @@ dbt のレイヤリング慣習に沿う。staging はソースに対する薄�
 
 raw の `raw_content` を状態機械でパースし、出現単位に応じてテーブルを分離する。**なるべく生データを残す**。
 
+パース本体は BigQuery Managed Python UDF として実装し、dbt の staging モデル(SQL)から呼び出す([ADR-0009](adr/0009-staging-parse-bigquery-python-udf.md))。UDF のコードは `src/piyolog/parse.py` に通常の Python モジュールとして置き、pytest でユニットテストした上で GCS 経由で UDF 定義から参照する。dbt は raw → staging → intermediate → marts の全レイヤーを引き続き管理する。
+
 | テーブル | 粒度 | 主なカラム |
 |---|---|---|
-| `stg_daily_header` | 日次1レコード | source_year_month, log_date, child_name, child_age_raw |
-| `stg_events` | イベント1レコード | source_year_month, log_date, event_seq, event_time, event_type_raw, detail_raw |
-| `stg_daily_notes` | 日次1レコード | source_year_month, log_date, note_raw |
+| `stg_piyolog__daily_headers` | 日次1レコード | child_name, source_year_month, log_date, child_age_raw |
+| `stg_piyolog__events` | イベント1レコード | child_name, source_year_month, log_date, event_seq, event_time, event_type_raw, detail_raw |
+| `stg_piyolog__daily_notes` | 日次1レコード | child_name, source_year_month, log_date, note_raw |
 
-- 照合キー: `(source_year_month, log_date)`。1ファイル=1子供のため child_name はキーに不要。
-- child_name / 年齢はファイル・日次に1回しか出ないので、イベント行ごとには持たせない(正規化)。必要時はヘッダーと結合。
+- 照合キー: `(child_name, source_year_month, log_date)`(events はさらに `event_seq` を含む)。当初は `(source_year_month, log_date)` のみ(1ファイル=1子供のため child_name はキーに不要という想定)としていたが、2025-09 以降は同一年月に2子供のファイルが併存するため、テーブル全体でのユニーク性を保つには `child_name` が必須(実データで確認済み)。
+- 年齢はファイル・日次に1回しか出ないので、イベント行ごとには持たせない(正規化)。必要時はヘッダーと結合。
 
 #### パース状態機械(確定仕様)
 
@@ -128,11 +132,21 @@ raw の `raw_content` を状態機械でパースし、出現単位に応じて�
 3. **SUMMARY**: `母乳合計` 行〜`うんち合計` 行。間の項目数は可変(`搾母乳合計` 等が入りうる)。BQには保持せず読み飛ばす。
 4. **NOTES**: `うんち合計` 行の次行〜セクション末尾。全文を `note_raw` として収集(`【見出し】` 含む)。
 
+#### 実装パターン(reducer + fold)
+
+`src/piyolog/parse.py` では、関数型プログラミングの原則([Python設計ガイド](../CLAUDE.md))に従い、状態機械を次の3層に分解する。
+
+1. `classify_line(line) -> LineToken`: 行 → 構造化トークンへの純粋変換(行レベル)
+2. `step(state: ParseState, token: LineToken) -> ParseState`: `(状態, トークン)` を受けて次の状態を返す reducer(状態遷移レベル)。`ParseState` はイミュータブルな dataclass。ファイル末尾は `EndOfFile` 番兵トークンを合成し、最終セクションの確定も通常の遷移として扱う
+3. `parse_file(raw_content) -> tuple[DaySection, ...]`: `functools.reduce(step, tokenize(raw_content), initial_state)` によるファイル全体の畳み込み(合成のみ)
+
+`step` を `(state, token) -> state` の純粋関数として切り出すことで、フルファイルのフィクスチャなしに個々の状態遷移をテーブル駆動でテストできる。BigQuery UDF 上でのデバッグは難しいため、ロジックの大部分を UDF 実行前に pytest で検証しておく狙い([ADR-0009](adr/0009-staging-parse-bigquery-python-udf.md))。
+
 ### 5.3 intermediate(種別ごと + 区間) ※一部方針確定・設計は今後
 
 #### 種別ごとテーブル(タイプ別)
 
-`stg_events` を既知種別ごとに分割。各種別固有スキーマで `detail_raw` を構造化する。
+`stg_piyolog__events` を既知種別ごとに分割。各種別固有スキーマで `detail_raw` を構造化する。
 
 確認済みの種別グループ(全期間・子供2名の全ファイルから抽出。詳細は `docs/known_event_types.md` を参照):
 
@@ -185,7 +199,7 @@ raw の `raw_content` を状態機械でパースし、出現単位に応じて�
 |---|---|---|
 | 1. raw層 | Drive API 読み取り + BQ raw テーブル(Cloud Run job, Python) | 仕様確定・実装指示書あり(別ドキュメント) |
 | 2. 種別棚卸し | BQ 上の raw_content から全期間の種別を抽出・和集合を確定 | 完了(`docs/known_event_types.md`) |
-| 3. staging | 状態機械パース → header / events / notes の3テーブル | 仕様確定・実装TODO |
+| 3. staging | 状態機械パース(BigQuery Python UDF)→ daily_headers / events / daily_notes の3テーブル | 仕様確定・実装TODO |
 | 4. intermediate(種別) | タイプ別テーブルへ分割、詳細構造化 | スキーマ設計TODO |
 | 5. intermediate(区間) | sleep_intervals 等、enrich | 設計TODO |
 | 6. marts | 用途特化マート | 用途確定後 |
@@ -210,12 +224,14 @@ raw の `raw_content` を状態機械でパースし、出現単位に応じて�
 | パース実行場所 | Python 手続き処理 → [ADR-0005](adr/0005-python-parse.md) |
 | 日次集計フッター | BQ に保持しない → [ADR-0006](adr/0006-no-daily-summary-storage.md) |
 | 子供の区別 | Drive フォルダで分離 → [ADR-0007](adr/0007-child-separation-by-drive-folder.md) |
+| CI イメージ更新 | Terraform 外で `gcloud run jobs update` → [ADR-0008](adr/0008-ci-image-update-strategy.md) |
+| staging パース実装 | BigQuery Python UDF(reducer + fold) → [ADR-0009](adr/0009-staging-parse-bigquery-python-udf.md) |
 | 日次メモ | `daily_notes` として別テーブル保持、全文検索あり（シンプル方針） |
 | 種別リスト方針 | 方針P（既知種別を固定定義、未知は警告検知） |
 | 睡眠 staging | 方針X（イベントを生のまま1行） |
 | 睡眠 intermediate | 方針Y（区間データへ変換） |
-| staging のテーブル分割 | header / events / notes に正規化分離 |
-| 照合キー(staging) | `(source_year_month, log_date)` |
+| staging のテーブル分割 | daily_headers / events / daily_notes に正規化分離 |
+| 照合キー(staging) | `(child_name, source_year_month, log_date)`(events はさらに `event_seq`) |
 | パース終了マーカー | EVENTS終了= `母乳合計`、SUMMARY終了= `うんち合計` |
 | イベント開始行判定 | 行頭 `^\d{1,2}:\d{2}\s+`(実データはスペース区切り。タブは存在しない) |
 | 洗い替え単位 | `(child_name, source_year_month)` |
