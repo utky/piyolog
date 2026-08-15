@@ -68,20 +68,25 @@
 
 ## フェーズ3: staging (仕様確定・実装 TODO)
 
-目標テーブル: `stg_daily_header` / `stg_events` / `stg_daily_notes`
+目標テーブル: `stg_piyolog__daily_headers` / `stg_piyolog__events` / `stg_piyolog__daily_notes`
+(パース実装方式は [ADR-0009](docs/adr/0009-staging-parse-bigquery-python-udf.md) 参照: BigQuery Python UDF + dbt SQL モデル)
 
 - [x] dbt プロジェクトを初期化する (`dbt/` 配下。dbt-bigquery を dev 依存に追加、profile の dataset (`piyolog`) + 各レイヤーの `+schema` (dbt標準の `generate_schema_name` で連結) でデータセットを分割、raw source 定義済み。staging/intermediate/marts の実モデルは未実装)
 - [x] `piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットの Terraform コードを実装する (`tf/modules/bigquery/`。dbt が実体テーブル/ビューを管理するため `delete_contents_on_destroy = true`。raw層とは異なり destroy 時のコンテンツ保護は行わない)
-- [ ] (ユーザー作業) 上記 `terraform apply` を実行し、`piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットを実際に作成する
-- [ ] `stg_daily_header` モデルを実装する (粒度: 日次1レコード)
-- [ ] `stg_events` モデルを実装する (粒度: イベント1レコード)
-  - 状態機械パース (HEADER → EVENTS → SUMMARY → NOTES)
+- [x] (ユーザー作業) 上記 `terraform apply` を実行し、`piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットを実際に作成する (`bq ls` で3データセットの存在確認済み)
+- [ ] `src/piyolog/parse.py` を実装する (reducer + fold パターン。詳細は `docs/overview.md` §5.2「実装パターン」参照)
+  - `classify_line(line) -> LineToken`: 行 → 構造化トークン(純粋関数、行レベル)
+  - `step(state: ParseState, token: LineToken) -> ParseState`: 状態遷移の reducer(イミュータブル dataclass。`EndOfFile` 番兵トークンで最終セクションを確定)
+  - `parse_file(raw_content) -> tuple[DaySection, ...]`: `functools.reduce(step, tokenize(...), initial)` によるファイル単位の畳み込み
   - イベント開始行判定: `^\d{1,2}:\d{2}\s+`(半角スペース区切り。タブは実データに存在しない)
-  - EVENTS 終了マーカー: `母乳合計`
-  - SUMMARY 終了マーカー: `うんち合計`
+  - EVENTS 終了マーカー: `母乳合計` / SUMMARY 終了マーカー: `うんち合計`
   - 複数行詳細テキストの `detail_raw` への追記
-- [ ] `stg_daily_notes` モデルを実装する (粒度: 日次1レコード)
-- [ ] 照合キー `(source_year_month, log_date)` のユニーク制約テストを追加する
+  - `classify_line` / `step` をテーブル駆動で網羅的に pytest ユニットテストする(フルファイルフィクスチャに頼らない)。`parse_file` は少数の代表的な結合テストのみ
+- [ ] `tf/modules/bigquery/` に BigQuery Python UDF ルーティン (`google_bigquery_routine`, LANGUAGE python) を追加し、`src/piyolog/parse.py` を GCS 経由で参照する
+- [ ] `stg_piyolog__daily_headers` モデルを実装する (粒度: 日次1レコード。UDF を呼び出し UNNEST)
+- [ ] `stg_piyolog__events` モデルを実装する (粒度: イベント1レコード)
+- [ ] `stg_piyolog__daily_notes` モデルを実装する (粒度: 日次1レコード)
+- [ ] 照合キー `(child_name, source_year_month, log_date)`(events はさらに `event_seq`)のユニーク制約テストを追加する
 - [ ] 未知種別が出た場合に警告/エラーで検知する仕組みを実装する (方針P)
 
 ---
@@ -89,7 +94,7 @@
 ## フェーズ4: intermediate - 種別ごとテーブル (スキーマ設計 TODO)
 
 - [ ] 確定した種別リスト (`docs/known_event_types.md`) をもとに種別ごとテーブルのスキーマを設計する
-- [ ] `stg_events` から種別ごとに分割する dbt モデルを実装する
+- [ ] `stg_piyolog__events` から種別ごとに分割する dbt モデルを実装する
   - 数値/量型: 体温, のみもの, ミルク, 搾乳/搾母乳, 体重, 身長, 頭囲
   - 状態型: 起きる, 寝る, おしっこ, うんち
   - 授乳型: 母乳 (複数フォーマット対応)

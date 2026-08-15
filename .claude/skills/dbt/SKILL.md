@@ -34,13 +34,15 @@
 
 ## staging 設計方針
 
+- パース本体は BigQuery Managed Python UDF として実装し、dbt の staging モデル（SQL）から呼び出す（[ADR-0009](../../docs/adr/0009-staging-parse-bigquery-python-udf.md)）。UDF コードは `src/piyolog/parse.py` に通常の Python モジュールとして置き、pytest でユニットテストする
+- パーサ内部は reducer + fold パターンで構成する: `classify_line(line) -> LineToken`（行レベル）→ `step(state, token) -> state`（状態遷移 reducer）→ `functools.reduce` によるファイル単位の畳み込み。詳細は `docs/overview.md` §5.2「実装パターン」参照
 - パース状態機械: `HEADER → EVENTS → SUMMARY → NOTES`
 - イベント開始行判定: `^\d{1,2}:\d{2}\s+`(半角スペース区切り。タブは実データに存在しない)
 - EVENTS 終了マーカー: `母乳合計` で始まる行
 - SUMMARY（`母乳合計`〜`うんち合計`）は BQ に保持しない
 - NOTES は `うんち合計` 行の次行〜セクション末尾
-- `child_name` / 年齢はイベント行に持たせず header と結合（正規化）
-- 照合キー: `(source_year_month, log_date)`
+- 年齢はイベント行に持たせず header と結合（正規化）。`child_name` は各テーブルの主キーの一部として保持する（同一年月に複数の子供のファイルが併存するため）
+- 照合キー: `(child_name, source_year_month, log_date)`(events はさらに `event_seq`)
 
 ## intermediate 設計方針
 
