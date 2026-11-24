@@ -149,7 +149,7 @@ from parsed, unnest(parsed.result.<headers|events|notes>) as <field>
 ## 5. 実行方法
 
 ```bash
-uv sync --extra dev
+uv sync
 uv run pytest tests/test_parse.py -v          # UDFロジックのユニットテスト
 uv run dbt build --select "resource_type:function stg_piyolog__daily_headers+ stg_piyolog__events+ stg_piyolog__daily_notes+" --project-dir dbt --profiles-dir dbt
 ```

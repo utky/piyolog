@@ -1386,7 +1386,7 @@ dependencies = [
     { name = "google-cloud-bigquery" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "dbt-bigquery" },
     { name = "pytest" },
@@ -1398,17 +1398,20 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dbt-bigquery", marker = "extra == 'dev'", specifier = ">=1.11" },
     { name = "google-api-python-client", specifier = ">=2.149" },
     { name = "google-auth", specifier = ">=2.35" },
     { name = "google-cloud-bigquery", specifier = ">=3.26" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
-    { name = "sqlfluff", marker = "extra == 'dev'", specifier = ">=3.0" },
-    { name = "sqlfluff-templater-dbt", marker = "extra == 'dev'", specifier = ">=3.0" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "dbt-bigquery", specifier = ">=1.11" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-mock", specifier = ">=3.14" },
+    { name = "ruff", specifier = ">=0.6" },
+    { name = "sqlfluff", specifier = ">=3.0" },
+    { name = "sqlfluff-templater-dbt", specifier = ">=3.0" },
+]
 
 [[package]]
 name = "platformdirs"

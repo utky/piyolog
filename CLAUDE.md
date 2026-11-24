@@ -16,7 +16,7 @@
 パッケージ管理は `uv`。
 
 ```bash
-uv sync --extra dev          # 依存インストール
+uv sync                      # 依存インストール (dev グループ込み)
 uv run ruff check .          # lint (Python)
 uv run ruff format .         # フォーマット (Python)
 uv run sqlfluff lint dbt/models dbt/tests sql/analysis  # lint (SQL)
@@ -24,11 +24,15 @@ uv run sqlfluff fix dbt/models dbt/tests sql/analysis   # 自動修正 (SQL)
 uv run pytest --tb=short     # テスト
 uv run pytest tests/test_drive.py::test_xxx -v  # 単一テスト
 uv run python -m piyolog.main  # ジョブ実行(要環境変数)
+uv run --no-project --python 3.11 --with pytest pytest tests/test_parse.py  # UDF テスト (BigQuery ランタイム)
 ```
+
+dev 依存 (pytest / ruff / dbt / sqlfluff) は `[dependency-groups] dev` にあり、`uv sync` / `uv run`
+で既定で入る。`dbt` は PATH に無いので `uv run dbt ...` で呼ぶ。
 
 SQL lint は sqlfluff の jinja テンプレータ(`apply_dbt_builtins`)を使い、BigQuery 認証情報
 なしで実行できる(`.sqlfluff` 参照)。CI (`ci.yml`) は `ruff check` / `ruff format --check` /
-`sqlfluff lint` / `pytest` の4点を毎回実行する。dbt モデル・UDF・SQL分析スクリプトを追加/変更
+`sqlfluff lint` / `pytest` / UDF テスト (Python 3.11) の5点を毎回実行する。dbt モデル・UDF・SQL分析スクリプトを追加/変更
 した際は、コミット前にローカルで `uv run sqlfluff lint dbt/models dbt/tests sql/analysis` を
 通しておくこと。
 
