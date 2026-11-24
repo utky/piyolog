@@ -34,3 +34,8 @@ jobs:
 
       - name: Run tests
         run: uv run pytest --tb=short
+
+      # BigQuery Python UDF は python-3.11 でのみ動くため、UDF 本体のテストを 3.11 でも実行する
+      # (ADR-0009)。テストは stdlib + pytest のみに依存するのでプロジェクト依存は入れない。
+      - name: Run UDF tests on BigQuery runtime (Python 3.11)
+        run: uv run --no-project --python 3.11 --with pytest pytest --tb=short tests/test_parse.py

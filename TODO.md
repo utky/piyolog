@@ -80,7 +80,7 @@ dbt/BigQuery に完結させる方式に変更した ([ADR-0009](docs/adr/0009-b
 - [x] `dbt/functions/parse_piyolog_export.py` / `.yml` を実装する (状態機械パース、STRUCT戻り値)
   - reducer + fold パターンで構成: `classify_line(line) -> LineToken` → `step(state, token) -> ParseState` → `functools.reduce` によるファイル単位の畳み込み (`EndOfFile` 番兵トークンで最終セクションを確定)
   - `runtime_version: "3.11"` (BigQuery Python UDF が対応するのは `python-3.11` のみ。UDF 本体は 3.11 互換の構文で書く)
-- [x] `tests/test_parse.py` を実装する (モックなしユニットテスト。`classify_line` / `step` はテーブル駆動、`parse_export_content` は少数の結合テスト)
+- [x] `tests/test_parse.py` を実装する (モックなしユニットテスト。`classify_line` / `step` はテーブル駆動、`parse_export_content` は少数の結合テスト)。CI では BigQuery のランタイムに合わせ Python 3.11 でも実行する
 - [x] `stg_piyolog__daily_headers` / `stg_piyolog__events` / `stg_piyolog__daily_notes` モデルを実装する (UDF呼び出し + UNNEST)
 - [x] `daily_header_id` (サロゲートキー) のユニーク制約テスト、`events` の `(daily_header_id, event_seq)` 複合一意性テストを追加する
 - [x] 未知種別が出た場合に警告で検知する仕組みを実装する (方針P。`event_type_raw` への `accepted_values` テスト、severity: warn)
