@@ -23,8 +23,19 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Lint (ruff)
+      - name: Lint (ruff check)
         run: uv run ruff check .
+
+      - name: Lint (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Lint (sqlfluff)
+        run: uv run sqlfluff lint dbt/models dbt/tests sql/analysis
 
       - name: Run tests
         run: uv run pytest --tb=short
+
+      # BigQuery Python UDF は python-3.11 でのみ動くため、UDF 本体のテストを 3.11 でも実行する
+      # (ADR-0009)。テストは stdlib + pytest のみに依存するのでプロジェクト依存は入れない。
+      - name: Run UDF tests on BigQuery runtime (Python 3.11)
+        run: uv run --no-project --python 3.11 --with pytest pytest --tb=short tests/test_parse.py

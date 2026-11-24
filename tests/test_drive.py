@@ -29,11 +29,11 @@ def test_parse_year_month_valid(file_name: str, expected: date) -> None:
 @pytest.mark.parametrize(
     "file_name",
     [
-        "ぴよログ2024年10月.txt",          # missing 【】
-        "ぴよログ2024年10月",              # missing 【】, no extension
-        "【ぴよログ】2024年10月.csv",       # wrong extension
-        "【ぴよログ】2024年.txt",           # missing month
-        "【ぴよログ】2024年",              # missing month, no extension
+        "ぴよログ2024年10月.txt",  # missing 【】
+        "ぴよログ2024年10月",  # missing 【】, no extension
+        "【ぴよログ】2024年10月.csv",  # wrong extension
+        "【ぴよログ】2024年.txt",  # missing month
+        "【ぴよログ】2024年",  # missing month, no extension
         "notes.txt",
         "",
     ],

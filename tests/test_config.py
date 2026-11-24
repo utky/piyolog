@@ -46,5 +46,6 @@ def test_config_bq_table_ref(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DRIVE_CHILD_FOLDERS", json.dumps({"child": "folder_id"}))
 
     from piyolog.config import Config
+
     cfg = Config()
     assert cfg.bq_table_ref == "my-project.my_dataset.my_table"

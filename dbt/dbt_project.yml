@@ -5,6 +5,7 @@ config-version: 2
 profile: "piyolog"
 
 model-paths: ["models"]
+function-paths: ["functions"]
 
 clean-targets:
   - "target"
@@ -24,3 +25,8 @@ models:
     marts:
       +schema: marts
       +materialized: table
+
+# parse_piyolog_export UDF は staging と同じ piyolog_staging データセットに置く。
+functions:
+  piyolog:
+    +schema: staging

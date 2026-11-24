@@ -25,9 +25,7 @@ from piyolog.config import Config
 
 # Derive the set of standard LogRecord attributes from an actual LogRecord instance
 # so that any extra={} fields passed by callers are forwarded to the JSON output.
-_STDLIB_LOG_ATTRS = frozenset(
-    logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys()
-)
+_STDLIB_LOG_ATTRS = frozenset(logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys())
 
 
 class _JsonFormatter(logging.Formatter):
@@ -67,9 +65,7 @@ def main() -> None:
         },
     )
 
-    credentials, _ = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/drive.readonly"]
-    )
+    credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/drive.readonly"])
     drive_service = drive.build_drive_service(credentials)
     bq_client = bigquery.Client(project=config.bq_project_id)
 
