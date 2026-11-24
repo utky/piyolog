@@ -8,7 +8,8 @@ dependencies = [
     "google-cloud-bigquery>=3.26",
 ]
 
-[project.optional-dependencies]
+# dev グループは uv sync / uv run で既定で入る (本番イメージは Dockerfile の --no-dev で除外)
+[dependency-groups]
 dev = [
     "pytest>=8.0",
     "pytest-mock>=3.14",
