@@ -91,6 +91,7 @@ raw層に限定した実装指示は別ドキュメント(`piyolog_raw_layer_spe
 | [0005](adr/0005-python-parse.md) | パース処理は BQ 完結を断念し Python で実施 |
 | [0006](adr/0006-no-daily-summary-storage.md) | 日次集計フッターは BQ に保持せず都度集計 |
 | [0007](adr/0007-child-separation-by-drive-folder.md) | 子供の区別は Drive フォルダで行う |
+| [0008](adr/0008-ci-image-update-strategy.md) | CI によるイメージ更新戦略(Terraform 外のデプロイ) |
 | [0009](adr/0009-bq-python-udf-parsing.md) | staging層のパースは BigQuery Python UDF で実施し dbt に統合する(ADR-0005 改訂) |
 
 ---
@@ -118,9 +119,9 @@ raw の `raw_content` を **BigQuery Python UDF `parse_piyolog_export`** で状�
 | `stg_piyolog__events` | イベント1レコード | daily_header_id, event_seq, event_at, event_type_raw, detail_raw |
 | `stg_piyolog__daily_notes` | 日次1レコード(メモがある日のみ) | daily_header_id, note_raw |
 
-- 照合キー: `daily_header_id`(`{child_name}:{log_date}` のサロゲートキー)。複数の子供の
-  データが1テーブルに集約されるため、`(source_year_month, log_date)` だけでは一意にならない
-  (child_a と child_b が同じ月に同じ log_date を持ちうる)。`events` は
+- 照合キー: `daily_header_id`(`{child_name}:{log_date}` のサロゲートキー)。2025-09 以降は
+  同一年月に2子供のファイルが併存するため、`(source_year_month, log_date)` だけでは一意にならない
+  (child_a と child_b が同じ月に同じ log_date を持つ。実データで確認済み)。`events` は
   `(daily_header_id, event_seq)` が一意。
 - `events` は時系列データとして単体で日付フィルタできるよう、`event_time` 単体ではなく
   `log_date` と時刻を合成した `event_at`(DATETIME、現地時刻・タイムゾーンなし)を持つ。
@@ -136,6 +137,16 @@ raw の `raw_content` を **BigQuery Python UDF `parse_piyolog_export`** で状�
    - 合致しない非空行は直前イベントの `detail_raw` に改行付きで追記。
 3. **SUMMARY**: `母乳合計` 行〜`うんち合計` 行。間の項目数は可変(`搾母乳合計` 等が入りうる)。BQには保持せず読み飛ばす。
 4. **NOTES**: `うんち合計` 行の次行〜セクション末尾。全文を `note_raw` として収集(`【見出し】` 含む)。
+
+#### 実装パターン(reducer + fold)
+
+`dbt/functions/parse_piyolog_export.py` では、関数型プログラミングの原則([Python設計ガイド](../CLAUDE.md))に従い、状態機械を次の3層に分解する。
+
+1. `classify_line(line) -> LineToken`: 行 → 構造化トークンへの純粋変換(行レベル)
+2. `step(state: ParseState, token: LineToken) -> ParseState`: `(状態, トークン)` を受けて次の状態を返す reducer(状態遷移レベル)。`ParseState` はイミュータブルな dataclass。ファイル末尾は `EndOfFile` 番兵トークンを合成し、最終セクションの確定も通常の遷移として扱う
+3. `parse_export_content(raw_content, child_name, source_year_month)`: `functools.reduce(step, tokenize(raw_content), initial_state)` によるファイル全体の畳み込みと、確定したセクションの `DailyHeader` / `Event` / `DailyNote` への変換(合成のみ)
+
+`step` を `(state, token) -> state` の純粋関数として切り出すことで、フルファイルのフィクスチャなしに個々の状態遷移をテーブル駆動でテストできる。BigQuery UDF 上でのデバッグは難しいため、ロジックの大部分を UDF 実行前に pytest で検証しておく狙い([ADR-0009](adr/0009-bq-python-udf-parsing.md))。
 
 #### 未知種別の扱い(方針P)
 
@@ -224,9 +235,10 @@ UDF 側では検知しない。`stg_piyolog__events.event_type_raw` に対する
 | スマホ→クラウド | Drive API 直読み → [ADR-0002](adr/0002-drive-api-direct-read.md) |
 | raw層 | テキスト全文を BQ 保持 → [ADR-0003](adr/0003-raw-layer-full-text-bq.md) |
 | 取り込みジョブ | Cloud Run jobs → [ADR-0004](adr/0004-cloud-run-jobs.md) |
-| パース実行場所 | Python 手続き処理、BigQuery Python UDF として dbt に統合 → [ADR-0005](adr/0005-python-parse.md) / [ADR-0009](adr/0009-bq-python-udf-parsing.md) |
+| パース実行場所 | Python 手続き処理(reducer + fold)、BigQuery Python UDF として dbt に統合 → [ADR-0005](adr/0005-python-parse.md) / [ADR-0009](adr/0009-bq-python-udf-parsing.md) |
 | 日次集計フッター | BQ に保持しない → [ADR-0006](adr/0006-no-daily-summary-storage.md) |
 | 子供の区別 | Drive フォルダで分離 → [ADR-0007](adr/0007-child-separation-by-drive-folder.md) |
+| CI イメージ更新 | Terraform 外で `gcloud run jobs update` → [ADR-0008](adr/0008-ci-image-update-strategy.md) |
 | 日次メモ | `daily_notes` として別テーブル保持、全文検索あり（シンプル方針） |
 | 種別リスト方針 | 方針P（既知種別を固定定義、未知は警告検知。staging では dbt の accepted_values テストで実装） |
 | 睡眠 staging | 方針X（イベントを生のまま1行） |

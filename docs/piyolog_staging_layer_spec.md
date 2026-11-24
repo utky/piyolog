@@ -84,6 +84,20 @@ Python の `date`/`datetime` オブジェクトとして往復する。
 4. **NOTES**: `うんち合計` 行の次行〜セクション末尾。全文を `note_raw` として収集。
    空文字列の場合は `notes` 配列に含めない。
 
+### 実装構造(reducer + fold)
+
+状態機械は手続き的なループではなく、純粋関数の合成として実装する([ADR-0009](adr/0009-bq-python-udf-parsing.md))。
+
+| 関数 | 役割 | テスト |
+|---|---|---|
+| `classify_line(line) -> LineToken` | 行を文脈なしでトークン化(`Delimiter` / `DateLine` / `AgeLine` / `EventStart` / `EventsEnd` / `SummaryEnd` / `Blank` / `Text`)。`Delimiter` 以外は元の行を保持し、フェーズ依存の解釈(NOTES では全行テキスト等)は `step_section` に委ねる | テーブル駆動 |
+| `step_section(SectionDraft, LineToken) -> SectionDraft` | 日次セクション内のフェーズ遷移(HEADER → EVENTS → SUMMARY → NOTES) | テーブル駆動 |
+| `step(ParseState, LineToken) -> ParseState` | ファイル全体の reducer。`Delimiter` で新セクション開始、`Delimiter` / `EndOfFile` 番兵で直前セクションを確定(日付のないセクションは破棄) | テーブル駆動 |
+| `parse_export_content(...)` | `functools.reduce(step, tokenize(raw_content), ParseState())` で畳み込み、`DailyHeader` / `Event` / `DailyNote` に変換 | 少数の結合テスト |
+| `parse_piyolog_export(...)` | UDF の `entry_point`。結果を STRUCT 互換の `dict`(ARRAY は `list`)に変換するだけの薄いラッパー | 結合テスト |
+
+状態(`ParseState` / `SectionDraft` / `EventDraft`)はすべて `frozen=True` の dataclass。
+
 ### `daily_header_id`
 
 `{child_name}:{log_date.isoformat()}`(例: `child_a:2026-05-01`)。複数の子供のデータが
@@ -148,4 +162,7 @@ uv run dbt build --select "resource_type:function stg_piyolog__daily_headers+ st
 ## 6. 未検証のリスク(実装時に確認する)
 
 - 外部呼び出しを行わない素の Python UDF に Cloud Resource Connection が必要かどうか
-- `runtime_version: "3.12"` が BigQuery Python UDF でサポートされない場合は `"3.11"` 等に調整
+
+`runtime_version` は `"3.11"`(dbt が `python-3.11` に変換)。BigQuery Python UDF がサポートする
+ランタイムは `python-3.11` のみのため、プロジェクト全体は Python 3.12+ だが UDF 本体は 3.11 互換の
+構文で書く(3.11 での動作はローカルで確認済み)。

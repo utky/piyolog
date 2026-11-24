@@ -76,15 +76,17 @@ dbt/BigQuery に完結させる方式に変更した ([ADR-0009](docs/adr/0009-b
 - [x] dbt プロジェクトを初期化する (`dbt/` 配下)
 - [x] `piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットの Terraform コードを実装する (`tf/modules/bigquery/`)
 - [x] (ユーザー作業) 上記 `terraform apply` を実行し、`piyolog_staging` / `piyolog_intermediate` / `piyolog_marts` データセットを実際に作成する (2026-07-11, `bq ls --project_id=lofilab` で3データセットの存在を確認済み。中身は空、dbt build 未実施)
-- [x] ADR-0009 を作成する (BigQuery Python UDF によるパースの dbt/BigQuery 完結化)
+- [x] ADR-0009 を作成する (BigQuery Python UDF によるパースの dbt/BigQuery 完結化。PR #10 の設計検討(選択肢比較・GA確認・reducer+fold)を統合)
 - [x] `dbt/functions/parse_piyolog_export.py` / `.yml` を実装する (状態機械パース、STRUCT戻り値)
-- [x] `tests/test_parse.py` を実装する (モックなしユニットテスト)
+  - reducer + fold パターンで構成: `classify_line(line) -> LineToken` → `step(state, token) -> ParseState` → `functools.reduce` によるファイル単位の畳み込み (`EndOfFile` 番兵トークンで最終セクションを確定)
+  - `runtime_version: "3.11"` (BigQuery Python UDF が対応するのは `python-3.11` のみ。UDF 本体は 3.11 互換の構文で書く)
+- [x] `tests/test_parse.py` を実装する (モックなしユニットテスト。`classify_line` / `step` はテーブル駆動、`parse_export_content` は少数の結合テスト)
 - [x] `stg_piyolog__daily_headers` / `stg_piyolog__events` / `stg_piyolog__daily_notes` モデルを実装する (UDF呼び出し + UNNEST)
 - [x] `daily_header_id` (サロゲートキー) のユニーク制約テスト、`events` の `(daily_header_id, event_seq)` 複合一意性テストを追加する
 - [x] 未知種別が出た場合に警告で検知する仕組みを実装する (方針P。`event_type_raw` への `accepted_values` テスト、severity: warn)
 - [x] `docs/overview.md` / `docs/piyolog_staging_layer_spec.md` / `.claude/skills/dbt/SKILL.md` を更新する
 - [ ] (ユーザー作業・要 BQ 認証情報) `uv run dbt build` を実行し、UDF のデプロイと3モデルのビルド・テストが通ることを確認する
-  - 未検証のリスク: 素の Python UDF に Cloud Resource Connection が必要かどうか、`runtime_version: "3.12"` が対応しているか
+  - 未検証のリスク: 素の Python UDF に Cloud Resource Connection が必要かどうか
 
 ---
 

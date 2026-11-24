@@ -48,14 +48,15 @@ staging は dbt SQL モデルが raw を直接パースするのではなく、`
 
 ## staging 設計方針
 
-- パース状態機械: `HEADER → EVENTS → SUMMARY → NOTES`(UDF `parse_piyolog_export` 内で実装)
+- パース状態機械: `HEADER → EVENTS → SUMMARY → NOTES`(UDF `parse_piyolog_export` 内で実装。[ADR-0009](../../../docs/adr/0009-bq-python-udf-parsing.md))
+- パーサ内部は reducer + fold パターンで構成する: `classify_line(line) -> LineToken`（行レベル）→ `step(state, token) -> state`（状態遷移 reducer）→ `functools.reduce` によるファイル単位の畳み込み。詳細は `docs/overview.md` §5.2「実装パターン」参照
 - イベント開始行判定: `^\d{1,2}:\d{2}\s+`(半角スペース区切り。タブは実データに存在しない)
 - EVENTS 終了マーカー: `母乳合計` で始まる行
 - SUMMARY（`母乳合計`〜`うんち合計`）は BQ に保持しない
 - NOTES は `うんち合計` 行の次行〜セクション末尾
 - `child_name` / 年齢はイベント行に持たせず header と結合（正規化）
 - 照合キー: `daily_header_id`(`{child_name}:{log_date}` サロゲートキー)。events は
-  `(daily_header_id, event_seq)`。複数の子供のデータが1テーブルに集約されるため
+  `(daily_header_id, event_seq)`。2025-09 以降は同一年月に2子供のファイルが併存するため
   `(source_year_month, log_date)` だけでは一意にならない点に注意
 - `events.event_at` は `log_date` + イベント時刻を合成した DATETIME（単体で日付フィルタできるようにするための非正規化）
 - 未知種別の検知（方針 P）は UDF ではなく `event_type_raw` への dbt `accepted_values`

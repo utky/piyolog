@@ -34,4 +34,4 @@ functions:
         >
     config:
       entry_point: parse_piyolog_export
-      runtime_version: "3.12"
+      runtime_version: "3.11"
