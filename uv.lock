@@ -1387,6 +1387,9 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+dbt = [
+    { name = "dbt-bigquery" },
+]
 dev = [
     { name = "dbt-bigquery" },
     { name = "pytest" },
@@ -1404,6 +1407,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+dbt = [{ name = "dbt-bigquery", specifier = ">=1.11" }]
 dev = [
     { name = "dbt-bigquery", specifier = ">=1.11" },
     { name = "pytest", specifier = ">=8.0" },

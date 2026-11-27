@@ -16,6 +16,12 @@ variable "container_image" {
   default     = "asia-northeast1-docker.pkg.dev/lofilab/utky-applications/piyolog-importer:latest"
 }
 
+variable "dbt_container_image" {
+  type        = string
+  description = "dbt ジョブのコンテナイメージ"
+  default     = "asia-northeast1-docker.pkg.dev/lofilab/utky-applications/piyolog-dbt:latest"
+}
+
 variable "drive_child_folders" {
   type        = string
   description = "child_name -> Drive フォルダID の JSON マップ"

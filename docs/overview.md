@@ -51,12 +51,16 @@ raw層に限定した実装指示は別ドキュメント(`piyolog_raw_layer_spe
 [Google Drive] ぴよログ/<child_name>/【ぴよログ】YYYY年M月.txt
    │  Drive API で直接読み取り(GCSは経由しない)
    ▼
-[Cloud Run job] (Python, バッチ, 手動 or スケジュール起動)
+[Cloud Scheduler 06:00 JST] → [Cloud Workflows piyolog-daily] (ADR-0010)
+   │  ① importer job → ② dbt job の順に実行し、各ジョブの完了を待つ
+   ▼
+[Cloud Run job: piyolog-importer] (Python, バッチ)
    │  ファイル列挙 → 本文取得 → ファイル単位で洗い替えロード
    ▼
 [BigQuery: raw]   テキスト全文を1ファイル1レコードで保持
    │  ▲ パースロジック改善時はここから再パース(Drive再アクセス不要)
-   │  dbt(BigQuery Python UDF `parse_piyolog_export` を呼び出して状態機械パース)
+   │  [Cloud Run job: piyolog-dbt] dbt build
+   │  (BigQuery Python UDF `parse_piyolog_export` を呼び出して状態機械パース)
    ▼
 [BigQuery: staging]  行レベルにパースした生レコード(正規化)
    │  dbt
@@ -93,6 +97,7 @@ raw層に限定した実装指示は別ドキュメント(`piyolog_raw_layer_spe
 | [0007](adr/0007-child-separation-by-drive-folder.md) | 子供の区別は Drive フォルダで行う |
 | [0008](adr/0008-ci-image-update-strategy.md) | CI によるイメージ更新戦略(Terraform 外のデプロイ) |
 | [0009](adr/0009-bq-python-udf-parsing.md) | staging層のパースは BigQuery Python UDF で実施し dbt に統合する(ADR-0005 改訂) |
+| [0010](adr/0010-dbt-cloud-run-job-workflows.md) | dbt は Cloud Run job で実行し、取り込みジョブとの順序を Workflows で制御する |
 
 ---
 
@@ -235,6 +240,7 @@ UDF 側では検知しない。`stg_piyolog__events.event_type_raw` に対する
 | スマホ→クラウド | Drive API 直読み → [ADR-0002](adr/0002-drive-api-direct-read.md) |
 | raw層 | テキスト全文を BQ 保持 → [ADR-0003](adr/0003-raw-layer-full-text-bq.md) |
 | 取り込みジョブ | Cloud Run jobs → [ADR-0004](adr/0004-cloud-run-jobs.md) |
+| dbt 実行・日次オーケストレーション | Cloud Run job `piyolog-dbt` + Workflows(importer → dbt) → [ADR-0010](adr/0010-dbt-cloud-run-job-workflows.md) |
 | パース実行場所 | Python 手続き処理(reducer + fold)、BigQuery Python UDF として dbt に統合 → [ADR-0005](adr/0005-python-parse.md) / [ADR-0009](adr/0009-bq-python-udf-parsing.md) |
 | 日次集計フッター | BQ に保持しない → [ADR-0006](adr/0006-no-daily-summary-storage.md) |
 | 子供の区別 | Drive フォルダで分離 → [ADR-0007](adr/0007-child-separation-by-drive-folder.md) |

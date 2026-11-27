@@ -1,0 +1,8 @@
+.venv
+.git
+**/__pycache__
+dbt/target
+dbt/logs
+dbt/profiles.yml
+tf
+.claude

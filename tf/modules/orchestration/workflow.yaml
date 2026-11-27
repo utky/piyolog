@@ -1,0 +1,49 @@
+# piyolog 日次パイプライン (ADR-0010)
+#   1. piyolog-importer: Drive -> piyolog_raw.export_files
+#   2. piyolog-dbt:      dbt build (staging/intermediate/marts の構築 + テスト)
+#
+# googleapis.run.v2.projects.locations.jobs.run コネクタはジョブ実行の完了まで待ち、
+# 実行が失敗すると例外を送出する。
+# importer が失敗しても dbt は実行する(raw は常に整合した状態で、前回までの raw から
+# 正しく再構築できる。dbt test も毎日回す)。importer の失敗は最後に再送出して
+# Workflow 実行自体を失敗にする。
+main:
+  steps:
+    - init:
+        assign:
+          - parent: ${"projects/" + sys.get_env("GOOGLE_CLOUD_PROJECT_ID") + "/locations/" + sys.get_env("GOOGLE_CLOUD_LOCATION")}
+          - importer_error: null
+    - run_importer:
+        try:
+          call: googleapis.run.v2.projects.locations.jobs.run
+          args:
+            name: ${parent + "/jobs/" + sys.get_env("IMPORTER_JOB")}
+            connector_params:
+              timeout: 1800
+        except:
+          as: e
+          steps:
+            - log_importer_error:
+                call: sys.log
+                args:
+                  severity: ERROR
+                  json:
+                    message: "importer job failed; continuing with dbt build"
+                    error: ${e}
+            - keep_importer_error:
+                assign:
+                  - importer_error: ${e}
+    - run_dbt:
+        call: googleapis.run.v2.projects.locations.jobs.run
+        args:
+          name: ${parent + "/jobs/" + sys.get_env("DBT_JOB")}
+          connector_params:
+            timeout: 1800
+    - fail_if_importer_failed:
+        switch:
+          - condition: ${importer_error != null}
+            steps:
+              - reraise_importer_error:
+                  raise: ${importer_error}
+    - done:
+        return: "ok"

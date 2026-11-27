@@ -27,6 +27,7 @@
 - 環境変数: `BQ_PROJECT_ID` / `BQ_DATASET_ID` / `BQ_TABLE_ID` / `DRIVE_CHILD_FOLDERS` / `LOG_LEVEL` を `google_cloud_run_v2_job` に渡す。`DRIVE_CHILD_FOLDERS` は JSON 文字列の `sensitive` 変数として tfvars で管理 (リポジトリにはコミットしない。`terraform.tfvars.example` を参照用に用意)
 - BigQuery データセット/テーブル: Terraform (`tf/modules/bigquery/`) で事前 provision する。job 側 (`bq.py`) はテーブル存在確認のみで作成は行わない
 - 定期実行: 日次1回 (`0 6 * * * Asia/Tokyo`) の Cloud Scheduler → Cloud Run Jobs API (`:run` エンドポイント) 直接呼び出し。単一ジョブで引数オーバーライドが不要なため Cloud Workflows は使わず、Scheduler 専用 SA に `roles/run.invoker` を付与するだけで足りる
+  - → dbt ジョブ追加に伴い Scheduler → Workflows (importer → dbt) に変更 ([ADR-0010](docs/adr/0010-dbt-cloud-run-job-workflows.md))。単一ジョブという前提が崩れたため
 
 ### 実装 (完了)
 
@@ -87,6 +88,18 @@ dbt/BigQuery に完結させる方式に変更した ([ADR-0009](docs/adr/0009-b
 - [x] `docs/overview.md` / `docs/piyolog_staging_layer_spec.md` / `.claude/skills/dbt/SKILL.md` を更新する
 - [ ] (ユーザー作業・要 BQ 認証情報) `uv run dbt build` を実行し、UDF のデプロイと3モデルのビルド・テストが通ることを確認する
   - 未検証のリスク: 素の Python UDF に Cloud Resource Connection が必要かどうか
+
+---
+
+## dbt 実行環境 (ADR-0010)
+
+- [x] dbt 用 dependency group (`[dependency-groups] dbt`) と `Dockerfile.dbt` を追加する
+- [x] `tf/modules/dbt_job/` (dbt 用 SA・データセット単位の IAM・`piyolog-dbt` Cloud Run job) を実装する
+- [x] `tf/modules/orchestration/` (Workflow `piyolog-daily` + Scheduler) を実装し、旧 `tf/modules/scheduler/` を置き換える
+- [x] `deploy.yml` で `piyolog-dbt` イメージも build/push/再デプロイする
+- [ ] (マージ後) CI で `piyolog-dbt` イメージが push されたことを確認する
+- [ ] (ローカル) `tofu plan` で差分を確認し `tofu apply` する (Scheduler ジョブは再作成、Scheduler SA は `moved` で引き継ぎ)
+- [ ] Workflow `piyolog-daily` を手動実行し、importer → dbt が完走することを確認する (Workflow SA の最小権限 `run.invoker` + `run.viewer` で足りるかもここで確認)
 
 ---
 

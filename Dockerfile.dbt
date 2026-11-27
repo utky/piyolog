@@ -1,0 +1,22 @@
+# dbt build を実行する Cloud Run job 用イメージ (ADR-0010)。
+# importer (Dockerfile) とは別イメージにし、dbt の依存 (dependency-groups の dbt) だけを入れる。
+FROM python:3.12-slim
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock .python-version ./
+RUN uv sync --frozen --only-group dbt --no-install-project
+
+# 接続設定はテンプレートをそのまま使う (method: oauth = Cloud Run 上では job の SA の ADC)。
+# プロジェクト ID は環境変数 BQ_PROJECT_ID で渡す。
+COPY dbt/ ./dbt/
+COPY dbt/profiles.yml.example ./dbt/profiles.yml
+
+ENV DBT_PROFILES_DIR=/app/dbt \
+    DBT_PROJECT_DIR=/app/dbt \
+    DBT_TARGET_PATH=/tmp/dbt-target \
+    DBT_LOG_PATH=/tmp/dbt-logs
+
+CMD ["uv", "run", "--no-sync", "dbt", "build"]

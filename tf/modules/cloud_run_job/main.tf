@@ -100,4 +100,9 @@ resource "google_cloud_run_v2_job" "importer" {
   }
 
   depends_on = [google_secret_manager_secret_version.drive_child_folders]
+
+  # CI (deploy.yml) の `gcloud run jobs update` が書き込むメタデータ。Terraform 管理外なので差分にしない
+  lifecycle {
+    ignore_changes = [client, client_version]
+  }
 }

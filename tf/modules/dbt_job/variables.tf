@@ -14,19 +14,17 @@ variable "app_name" {
   default     = "piyolog"
 }
 
-variable "job_name" {
+variable "container_image" {
   type        = string
-  description = "取り込み Cloud Run Job名"
+  description = "dbt ジョブのコンテナイメージ"
 }
 
-variable "schedule" {
+variable "raw_dataset_id" {
   type        = string
-  description = "cron形式の実行スケジュール"
-  default     = "0 6 * * *"
+  description = "dbt の source となる raw 層データセットID (読み取りのみ)"
 }
 
-variable "time_zone" {
-  type        = string
-  description = "スケジュールのタイムゾーン"
-  default     = "Asia/Tokyo"
+variable "dbt_dataset_ids" {
+  type        = list(string)
+  description = "dbt が構築するデータセットID (staging / intermediate / marts)"
 }
