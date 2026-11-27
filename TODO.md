@@ -7,6 +7,7 @@
 ## フェーズ1: raw 層 ✅ 完了
 
 - [x] Drive API 読み取り + BQ raw テーブル (Cloud Run job, Python)
+- [x] 同一 `(child_name, source_year_month)` に複数ファイルがある月は取り込まず ERROR + job 失敗、Drive から消えた月は WARNING (`src/piyolog/selection.py`。2026-11 に誤配置ファイル由来の raw 重複を検知したことによる対策)
 
 ---
 
