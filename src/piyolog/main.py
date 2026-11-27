@@ -20,7 +20,7 @@ import os
 import google.auth
 from google.cloud import bigquery
 
-from piyolog import bq, drive
+from piyolog import bq, drive, selection
 from piyolog.config import Config
 
 # Derive the set of standard LogRecord attributes from an actual LogRecord instance
@@ -74,6 +74,7 @@ def main() -> None:
     )
 
     records: list[bq.ExportRecord] = []
+    ambiguous_total = 0
 
     for child_name, folder_id in config.drive_child_folders.items():
         log.info("Listing files", extra={"child_name": child_name, "folder_id": folder_id})
@@ -83,30 +84,56 @@ def main() -> None:
         loaded_at_map = bq.fetch_loaded_at(
             bq_client, config.bq_project_id, config.bq_dataset_id, config.bq_table_id, child_name
         )
+        picked = selection.select_monthly_files(files)
 
-        for drive_file in files:
-            try:
-                source_year_month = drive.parse_year_month_from_filename(drive_file.name)
-            except ValueError as e:
-                log.warning(
-                    "Skipping file with unrecognized name",
-                    extra={
-                        "child_name": child_name,
-                        "file_name": drive_file.name,
-                        "reason": str(e),
-                    },
-                )
-                continue
+        for f in picked.unrecognized:
+            log.warning(
+                "Skipping file with unrecognized name",
+                extra={"child_name": child_name, "file_name": f.name, "drive_file_id": f.file_id},
+            )
 
-            existing_loaded_at = loaded_at_map.get(source_year_month)
-            if existing_loaded_at is not None and drive_file.modified_at <= existing_loaded_at:
+        for amb in picked.ambiguous:
+            ambiguous_total += 1
+            log.error(
+                "Multiple files for the same month; skipping this month and keeping existing raw. "
+                "Remove the misplaced file from Drive.",
+                extra={
+                    "child_name": child_name,
+                    "source_year_month": amb.source_year_month.isoformat(),
+                    "files": [
+                        {
+                            "drive_file_id": f.file_id,
+                            "file_name": f.name,
+                            "drive_modified_at": f.modified_at.isoformat(),
+                        }
+                        for f in amb.files
+                    ],
+                },
+            )
+
+        orphaned = selection.find_orphaned_months(loaded_at_map.keys(), picked.months_in_drive)
+        if orphaned:
+            log.warning(
+                "Raw rows exist for months no longer in Drive; they are not deleted automatically",
+                extra={
+                    "child_name": child_name,
+                    "source_year_months": [m.isoformat() for m in orphaned],
+                },
+            )
+
+        for monthly in picked.selected:
+            drive_file = monthly.file
+            existing_loaded_at = loaded_at_map.get(monthly.source_year_month)
+            if not selection.needs_reload(drive_file.modified_at, existing_loaded_at):
                 log.debug(
                     "Skipping unmodified file",
                     extra={
                         "child_name": child_name,
                         "file_name": drive_file.name,
                         "drive_modified_at": drive_file.modified_at.isoformat(),
-                        "existing_loaded_at": existing_loaded_at.isoformat(),
+                        "existing_loaded_at": existing_loaded_at.isoformat()
+                        if existing_loaded_at
+                        else None,
                     },
                 )
                 continue
@@ -119,7 +146,7 @@ def main() -> None:
             records.append(
                 bq.ExportRecord(
                     child_name=child_name,
-                    source_year_month=source_year_month,
+                    source_year_month=monthly.source_year_month,
                     file_name=drive_file.name,
                     drive_file_id=drive_file.file_id,
                     raw_content=content,
@@ -130,7 +157,14 @@ def main() -> None:
     bq.bulk_merge(
         bq_client, config.bq_project_id, config.bq_dataset_id, config.bq_table_id, records
     )
-    log.info("Done", extra={"processed": len(records)})
+    log.info("Done", extra={"processed": len(records), "ambiguous_months": ambiguous_total})
+
+    if ambiguous_total:
+        # Other months were ingested normally; fail the execution so the problem is visible
+        # in Cloud Run job history until the misplaced file is removed from Drive.
+        raise SystemExit(
+            f"{ambiguous_total} month(s) had multiple Drive files and were skipped; see error logs"
+        )
 
 
 if __name__ == "__main__":
