@@ -85,8 +85,10 @@ dbt/BigQuery に完結させる方式に変更した ([ADR-0009](docs/adr/0009-b
 - [x] `daily_header_id` (サロゲートキー) のユニーク制約テスト、`events` の `(daily_header_id, event_seq)` 複合一意性テストを追加する
 - [x] 未知種別が出た場合に警告で検知する仕組みを実装する (方針P。`event_type_raw` への `accepted_values` テスト、severity: warn)
 - [x] `docs/overview.md` / `docs/piyolog_staging_layer_spec.md` / `.claude/skills/dbt/SKILL.md` を更新する
-- [ ] (ユーザー作業・要 BQ 認証情報) `uv run dbt build` を実行し、UDF のデプロイと3モデルのビルド・テストが通ることを確認する
-  - 未検証のリスク: 素の Python UDF に Cloud Resource Connection が必要かどうか
+- [x] `uv run dbt build` を実行し、UDF のデプロイと3モデルのビルド・テストが通ることを確認する (2026-11, ローカルから ADC で実行)
+  - 素の Python UDF に Cloud Resource Connection は不要だった
+  - 一意性テストの失敗で raw に誤配置ファイル由来の重複行(child_b に child_a の同月ファイル2件)を検知。Drive 側のファイル削除 + raw から該当2行を DELETE して解消
+  - accepted_values の警告で未知種別 `胸囲` / `メモ` を検知し、既知種別に追加 (計35種別)
 
 ---
 
@@ -94,10 +96,10 @@ dbt/BigQuery に完結させる方式に変更した ([ADR-0009](docs/adr/0009-b
 
 - [ ] 確定した種別リスト (`docs/known_event_types.md`) をもとに種別ごとテーブルのスキーマを設計する
 - [ ] `stg_piyolog__events` から種別ごとに分割する dbt モデルを実装する
-  - 数値/量型: 体温, のみもの, ミルク, 搾乳/搾母乳, 体重, 身長, 頭囲
+  - 数値/量型: 体温, のみもの, ミルク, 搾乳/搾母乳, 体重, 身長, 頭囲, 胸囲
   - 状態型: 起きる, 寝る, おしっこ, うんち
   - 授乳型: 母乳 (複数フォーマット対応)
-  - 自由記述型: 離乳食, ごはん, おやつ, さんぽ, 行き先イベント, 病院, 幼稚園, その他, お風呂, 白湯, 吐く, けが, せき, 予防接種
+  - 自由記述型: 離乳食, ごはん, おやつ, さんぽ, 行き先イベント, 病院, 幼稚園, その他, お風呂, 白湯, 吐く, けが, せき, 予防接種, メモ
   - トレーニング型: マイオブレース (🔴△❌)
   - ルーティン型: 生活習慣, スキンケア, くすり, ミルトン交換
   - 発達記録型: できた

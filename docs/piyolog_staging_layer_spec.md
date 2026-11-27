@@ -139,7 +139,7 @@ from parsed, unnest(parsed.result.<headers|events|notes>) as <field>
 
 - `dbt/models/staging/_piyolog__staging_models.yml`: `daily_header_id` の `unique`/`not_null`
   (daily_headers, daily_notes)、`event_type_raw` の `not_null` + `accepted_values`
-  (severity: warn、`docs/known_event_types.md` の33種別)
+  (severity: warn、`docs/known_event_types.md` の35種別)
 - `dbt/tests/assert_stg_piyolog__events_unique_key.sql`: `(daily_header_id, event_seq)` の
   複合一意性を検証する単発テスト(dbt_utils 非依存)
 - `tests/test_parse.py`: `parse_piyolog_export.py` のユニットテスト(pytest, モックなし)
