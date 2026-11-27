@@ -33,7 +33,7 @@ models:
       - name: event_type_raw
         description: >
           種別の生テキスト。方針P(既知種別を固定定義し未知種別は警告で検知)に基づき、
-          docs/known_event_types.md の33種別に対する accepted_values テスト(warn)で
+          docs/known_event_types.md の35種別に対する accepted_values テスト(warn)で
           未知種別を検知する。既知リストへの追加はフェーズ4(intermediate)側の判断で行う。
         tests:
           - not_null
@@ -73,6 +73,8 @@ models:
                   - "頭囲"
                   - "けが"
                   - "せき"
+                  - "胸囲"
+                  - "メモ"
               config:
                 severity: warn
 
