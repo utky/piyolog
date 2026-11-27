@@ -39,8 +39,12 @@ SQL lint は sqlfluff の jinja テンプレータ(`apply_dbt_builtins`)を使�
 Docker イメージビルド:
 
 ```bash
-docker build -t piyolog .
+docker build -t piyolog .                       # 取り込みジョブ
+docker build -f Dockerfile.dbt -t piyolog-dbt .  # dbt ジョブ ([dependency-groups] dbt のみ)
 ```
+
+インフラは OpenTofu (`tf/`) で管理し、apply はローカルから手動で行う (CI では apply しない)。
+イメージの build/push と Cloud Run job の再デプロイは `deploy.yml` が main への push で行う。
 
 ---
 
@@ -62,10 +66,11 @@ docker build -t piyolog .
 ```
 [スマホ] ぴよログ月次エクスポート → Google Drive (子供別フォルダ)
    ↓ Drive API
-[Cloud Run job] Python バッチ (src/piyolog/)
+[Cloud Scheduler] → [Workflows piyolog-daily] → ① importer → ② dbt (ADR-0010)
+[Cloud Run job: piyolog-importer] Python バッチ (src/piyolog/, Dockerfile)
    ↓
 [BigQuery: raw]   export_files テーブル (1ファイル1レコード)
-   ↓ dbt (未実装)
+   ↓ [Cloud Run job: piyolog-dbt] dbt build (dbt/, Dockerfile.dbt)
 [BigQuery: staging / intermediate / marts]
 ```
 

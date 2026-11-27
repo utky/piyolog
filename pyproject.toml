@@ -10,11 +10,15 @@ dependencies = [
 
 # dev グループは uv sync / uv run で既定で入る (本番イメージは Dockerfile の --no-dev で除外)
 [dependency-groups]
+# dbt 実行に必要な最小構成。dbt 用コンテナイメージ (Dockerfile.dbt) はこのグループだけを入れる
+dbt = [
+    "dbt-bigquery>=1.11",
+]
 dev = [
+    { include-group = "dbt" },
     "pytest>=8.0",
     "pytest-mock>=3.14",
     "ruff>=0.6",
-    "dbt-bigquery>=1.11",
     "sqlfluff>=3.0",
     "sqlfluff-templater-dbt>=3.0",
 ]

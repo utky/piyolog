@@ -13,7 +13,22 @@ output "importer_service_account_email" {
   description = "取り込みジョブ用SA。Driveフォルダの共有設定に使用する"
 }
 
+output "dbt_job_name" {
+  value       = module.dbt_job.job_name
+  description = "dbt Cloud Run Job名"
+}
+
+output "dbt_service_account_email" {
+  value       = module.dbt_job.service_account_email
+  description = "dbt ジョブ用SA"
+}
+
+output "workflow_name" {
+  value       = module.orchestration.workflow_name
+  description = "日次パイプライン Workflow名"
+}
+
 output "scheduler_name" {
-  value       = module.scheduler.scheduler_name
+  value       = module.orchestration.scheduler_name
   description = "Cloud Scheduler Job名"
 }
