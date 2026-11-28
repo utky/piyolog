@@ -1,7 +1,7 @@
 # ADR-0010: dbt は Cloud Run job で実行し、取り込みジョブとの順序を Workflows で制御する
 
 ## 状態
-提案(PR レビュー後に確定)
+確定(2026-11-27 本番 apply・Workflow 実行で動作確認済み)
 
 ## 決定
 
@@ -54,7 +54,7 @@ dbt test も毎日回したいので dbt はスキップしない。importer の
 | `piyolog-scheduler-sa` | project: `roles/workflows.invoker`(旧構成の importer job への `roles/run.invoker` は廃止) |
 
 公式チュートリアルは Workflow の SA に `roles/run.admin` を付与しているが、job 単位の invoker + project の viewer で
-足りる想定とし、初回 apply 後に Workflow を手動実行して確認する。
+足りることを初回 apply 後の Workflow 実行で確認した(2026-11-27)。
 
 ## トレードオフ・既知の注意点
 
