@@ -109,19 +109,18 @@ dbt/BigQuery に完結させる方式に変更した ([ADR-0009](docs/adr/0009-b
 
 ---
 
-## フェーズ4: intermediate - 種別ごとテーブル (スキーマ設計 TODO)
+## フェーズ4: intermediate - 種別ごとテーブル ✅ 実装完了(本番 build 待ち)
 
-- [ ] 確定した種別リスト (`docs/known_event_types.md`) をもとに種別ごとテーブルのスキーマを設計する
-- [ ] `stg_piyolog__events` から種別ごとに分割する dbt モデルを実装する
-  - 数値/量型: 体温, のみもの, ミルク, 搾乳/搾母乳, 体重, 身長, 頭囲, 胸囲
-  - 状態型: 起きる, 寝る, おしっこ, うんち
-  - 授乳型: 母乳 (複数フォーマット対応)
-  - 自由記述型: 離乳食, ごはん, おやつ, さんぽ, 行き先イベント, 病院, 幼稚園, その他, お風呂, 白湯, 吐く, けが, せき, 予防接種, メモ
-  - トレーニング型: マイオブレース (🔴△❌)
-  - ルーティン型: 生活習慣, スキンケア, くすり, ミルトン交換
-  - 発達記録型: できた
+設計は [ADR-0011](docs/adr/0011-intermediate-event-type-models.md)、仕様は `docs/piyolog_intermediate_layer_spec.md`。
 
----
+- [x] 確定した種別リスト (`docs/known_event_types.md`) をもとに種別ごとテーブルのスキーマを設計する
+  - 既知種別を seed `known_event_types` (event_type → event_group) に一元化し、staging の未知種別検知も seed 参照の relationships テストに置き換え
+  - 構造化できる15種別 (数値/量型・状態型・授乳型・トレーニング型) は個別モデル、構造化しない20種別 (自由記述型・ルーティン型・発達記録型) は `int_piyolog__events_free_text` に集約
+  - `白湯` は実データ上ほぼ空欄のため数値/量型ではなく自由記述型 (free_text) に分類
+- [x] `stg_piyolog__events` から種別ごとに分割する dbt モデルを実装する (土台 `int_piyolog__events` (table) + 16モデル)
+- [x] 実データに対して各モデルの SELECT を検証する (2026-11-28、BigQuery スクリプトの一時テーブルで実施。66,756件で件数一致、数値列のパース漏れは既知例外 `母乳` 5件 / `( ! )` 4件のみ)
+- [ ] マージ後、日次 Workflow (または手動実行) の `dbt build` で seed・intermediate モデルが作成され、テストが通る (warn は上記既知例外のみ) ことを確認する
+- [ ] (ユーザー確認) 母乳の記号 `▶` / `◀` とマイオブレースの記号 `🔴` / `△` / `▲` / `❌` の意味をアプリ仕様で確認し、必要なら意味づけした列を追加する
 
 ## フェーズ5: intermediate - 区間データ・enrich (設計 TODO)
 

@@ -1,0 +1,25 @@
+version: 2
+
+seeds:
+  - name: known_event_types
+    description: >
+      既知イベント種別 (方針P) の単一の定義元。docs/known_event_types.md の種別リストと
+      intermediate での構造化方針 (event_group) を持つ。staging の未知種別検知テストと
+      intermediate の種別振り分けの両方がこれを参照する。
+    config:
+      column_types:
+        event_type: string
+        event_group: string
+    columns:
+      - name: event_type
+        tests:
+          - unique
+          - not_null
+      - name: event_group
+        description: >
+          measurement (数値/量型) / state (状態型) / breastfeeding (授乳型) /
+          training (トレーニング型) は種別ごとモデルで構造化する。
+          free_text (自由記述型) / routine (ルーティン型) / milestone (発達記録型) は
+          構造化せず int_piyolog__events_free_text にまとめる。
+        tests:
+          - not_null

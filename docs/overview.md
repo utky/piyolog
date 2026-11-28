@@ -156,23 +156,27 @@ raw の `raw_content` を **BigQuery Python UDF `parse_piyolog_export`** で状�
 #### 未知種別の扱い(方針P)
 
 UDF 側では検知しない。`stg_piyolog__events.event_type_raw` に対する dbt の
-`accepted_values` スキーマテスト(severity: warn、値は `docs/known_event_types.md` の
-35種別)を検知の仕組みとする。`dbt build`/`dbt test` の実行結果自体が品質ゲートになる。
+`relationships` テスト(severity: warn、参照先は既知種別の seed `known_event_types`。
+内容は `docs/known_event_types.md` の35種別)を検知の仕組みとする。`dbt build`/`dbt test` の実行結果自体が品質ゲートになる。
 未知種別を `その他` へ寄せる変換は intermediate 層(5.3)の責務とし、staging では
 `event_type_raw` を生テキストのまま保持する。
 
-### 5.3 intermediate(種別ごと + 区間) ※一部方針確定・設計は今後
+### 5.3 intermediate(種別ごと + 区間) ※種別ごとモデルは実装済み・区間は設計TODO
 
 #### 種別ごとテーブル(タイプ別)
 
 `stg_piyolog__events` を既知種別ごとに分割。各種別固有スキーマで `detail_raw` を構造化する。
+既知種別は seed `known_event_types` に一元化し、土台 `int_piyolog__events`(table)で未知種別を
+`その他` に寄せたうえで、構造化できる15種別は個別モデル、構造化しない20種別(自由記述型・
+ルーティン型・発達記録型)は `int_piyolog__events_free_text` にまとめる
+([ADR-0011](adr/0011-intermediate-event-type-models.md)、仕様は `docs/piyolog_intermediate_layer_spec.md`)。
 
 確認済みの種別グループ(全期間・子供2名の全ファイルから抽出。詳細は `docs/known_event_types.md` を参照):
 
 - **数値/量型**: 体温, のみもの(ml), ミルク(ml), 搾乳/搾母乳(ml), 体重(g), 身長(cm), 頭囲(cm), 胸囲(cm)
 - **状態型**: 起きる(継続時間付き), 寝る, おしっこ, うんち(量補足: 多め/少なめ/ちょこっと/やわらかめ/色)
 - **授乳型**: 母乳(左右の分数 + 授乳順記号 ▶◀ + 補足)。フォーマット複数あり(`左20分 ▶ 右20分` / `左15分 / 右18分` / `右6分` / 時間情報なし)
-- **自由記述型**: 離乳食, ごはん, おやつ, さんぽ, 行き先イベント, 病院, 幼稚園, その他, お風呂, 白湯, 吐く, けが, せき, 予防接種, メモ
+- **自由記述型**: 白湯(フェーズ2時点では数値/量型としていたが実データはほぼ空欄), 離乳食, ごはん, おやつ, さんぽ, 行き先イベント, 病院, 幼稚園, その他, お風呂, 吐く, けが, せき, 予防接種, メモ
 - **トレーニング型**: マイオブレース(達成記号 🔴△❌)
 - **ルーティン型**: 生活習慣, スキンケア, くすり, ミルトン交換
 - **発達記録型**: できた(寝返り, ズリバイ 等)
@@ -219,7 +223,7 @@ UDF 側では検知しない。`stg_piyolog__events.event_type_raw` に対する
 | 1. raw層 | Drive API 読み取り + BQ raw テーブル(Cloud Run job, Python) | 仕様確定・実装指示書あり(別ドキュメント) |
 | 2. 種別棚卸し | BQ 上の raw_content から全期間の種別を抽出・和集合を確定 | 完了(`docs/known_event_types.md`) |
 | 3. staging | 状態機械パース(BigQuery Python UDF) → daily_headers / events / daily_notes の3モデル | 実装済み |
-| 4. intermediate(種別) | タイプ別テーブルへ分割、詳細構造化 | スキーマ設計TODO |
+| 4. intermediate(種別) | タイプ別テーブルへ分割、詳細構造化 | 実装済み(ADR-0011) |
 | 5. intermediate(区間) | sleep_intervals 等、enrich | 設計TODO |
 | 6. marts | 用途特化マート | 用途確定後 |
 | 7. dbt整備 | プロジェクト構成・命名・テスト | 並行 |
@@ -236,7 +240,7 @@ UDF 側では検知しない。`stg_piyolog__events.event_type_raw` に対する
 
 | 項目 | 決定 |
 |---|---|
-| 種別の扱い | タイプ別テーブル → [ADR-0001](adr/0001-type-based-tables.md) |
+| 種別の扱い | タイプ別テーブル → [ADR-0001](adr/0001-type-based-tables.md)。構造化しない種別は1モデルに集約、既知種別は seed で一元管理 → [ADR-0011](adr/0011-intermediate-event-type-models.md) |
 | スマホ→クラウド | Drive API 直読み → [ADR-0002](adr/0002-drive-api-direct-read.md) |
 | raw層 | テキスト全文を BQ 保持 → [ADR-0003](adr/0003-raw-layer-full-text-bq.md) |
 | 取り込みジョブ | Cloud Run jobs → [ADR-0004](adr/0004-cloud-run-jobs.md) |
@@ -246,7 +250,7 @@ UDF 側では検知しない。`stg_piyolog__events.event_type_raw` に対する
 | 子供の区別 | Drive フォルダで分離 → [ADR-0007](adr/0007-child-separation-by-drive-folder.md) |
 | CI イメージ更新 | Terraform 外で `gcloud run jobs update` → [ADR-0008](adr/0008-ci-image-update-strategy.md) |
 | 日次メモ | `daily_notes` として別テーブル保持、全文検索あり（シンプル方針） |
-| 種別リスト方針 | 方針P（既知種別を固定定義、未知は警告検知。staging では dbt の accepted_values テストで実装） |
+| 種別リスト方針 | 方針P（既知種別を固定定義、未知は警告検知。staging では seed `known_event_types` への relationships テスト(warn)で実装、intermediate で `その他` に寄せる） |
 | 睡眠 staging | 方針X（イベントを生のまま1行） |
 | 睡眠 intermediate | 方針Y（区間データへ変換） |
 | staging のテーブル分割 | daily_headers / events / daily_notes に正規化分離 |
@@ -263,3 +267,4 @@ UDF 側では検知しない。`stg_piyolog__events.event_type_raw` に対する
 
 - `piyolog_raw_layer_spec.md`: raw層に限定した実装指示書(別セッションでの実装用)。
 - `piyolog_staging_layer_spec.md`: staging層に限定した実装指示書(BigQuery Python UDF・状態機械・3モデルの詳細仕様)。
+- `piyolog_intermediate_layer_spec.md`: intermediate層の種別ごとモデルの仕様(列定義・パース規則・テスト)。

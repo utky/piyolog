@@ -122,5 +122,6 @@ docker build -f Dockerfile.dbt -t piyolog-dbt .  # dbt ジョブ ([dependency-gr
 |---|---|
 | `docs/overview.md` | 全体設計・レイヤー構成・ロードマップ |
 | `docs/piyolog_raw_layer_spec.md` | raw 層の実装仕様 |
+| `docs/piyolog_intermediate_layer_spec.md` | intermediate 層 (種別ごとモデル) の仕様 |
 | `docs/adr/` | 設計判断の ADR |
 | `TODO.md` | 実装タスク一覧 |

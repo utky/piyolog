@@ -6,6 +6,14 @@
 
 `overview.md` §5.3 の種別グループはこのリストに基づく。
 
+dbt では既知種別を seed `dbt/seeds/known_event_types.csv` で定義しており、staging の未知種別検知と
+intermediate の種別振り分けはこの seed を参照する([ADR-0011](adr/0011-intermediate-event-type-models.md))。
+**種別を追加するときは、このドキュメントと seed の両方を更新する。** seed の `event_group` は
+下表の「グループ」を英語の識別子にしたもの(数値/量型 = measurement, 状態型 = state,
+授乳型 = breastfeeding, 自由記述型 = free_text, トレーニング型 = training,
+ルーティン型 = routine, 発達記録型 = milestone)。ただし `白湯` は下表では数値/量型だが、
+127件中123件が空欄で量の記録が1件しかないため、seed では free_text にしている。
+
 ## 抽出方法の注記
 
 当初の設計ドキュメントでは「イベント開始行は `HH:MM` の直後がタブ区切り」としていたが、
@@ -128,7 +136,7 @@ detail_raw のバリエーションが既知の語彙に収まるかどうかで
 `stg_piyolog__events` には現れない。既知35種別の件数は抽出クエリと staging で完全に一致する。
 
 本当の未知種別(イベント行の種別欄が既知リストにないもの)は、方針Pに従い
-`stg_piyolog__events.event_type_raw` の accepted_values テスト(severity: warn)で検知する。
+`stg_piyolog__events.event_type_raw` の、seed `known_event_types` への relationships テスト(severity: warn)で検知する。
 staging では `event_type_raw` を生のまま保持し、`その他` への寄せは intermediate 層の責務とする。
 
 ### `その他` に入ったデータの再分類方法
