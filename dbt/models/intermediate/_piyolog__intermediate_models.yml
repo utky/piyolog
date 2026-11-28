@@ -1,0 +1,287 @@
+version: 2
+
+models:
+  - name: int_piyolog__events
+    description: >
+      全種別のイベント。stg_piyolog__events に child_name / log_date を付与し、
+      seed known_event_types で event_type / event_group を確定させたもの。
+      未知種別は event_type = その他 に寄せる (方針P)。種別ごとモデルの土台。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: child_name
+        tests:
+          - not_null
+      - name: log_date
+        tests:
+          - not_null
+      - name: event_at
+        tests:
+          - not_null
+      - name: event_type
+        description: 既知種別。未知種別は `その他`
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('known_event_types')
+                field: event_type
+      - name: event_group
+        description: seed known_event_types の event_group (構造化方針による分類)
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [measurement, state, breastfeeding, training, free_text, routine, milestone]
+      - name: event_type_raw
+        description: staging の種別の生テキスト
+      - name: is_unknown_event_type
+        description: event_type_raw が既知種別に無く `その他` に寄せた行
+
+  - name: int_piyolog__events_temperature
+    description: 体温。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: temperature_celsius
+        description: 体温 (°C)
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+
+  - name: int_piyolog__events_formula_milk
+    description: ミルク。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: volume_ml
+        description: 量 (ml)
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+
+  - name: int_piyolog__events_drink
+    description: のみもの。memo に飲み物名 (牛乳・湯冷まし 等) が入る。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: volume_ml
+        description: 量 (ml)
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+
+  - name: int_piyolog__events_breast_pumping
+    description: 搾乳。memo に左右・搾乳方法・保存方法が入る。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: volume_ml
+        description: 量 (ml)
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+
+  - name: int_piyolog__events_expressed_breast_milk
+    description: 搾母乳 (搾った母乳を飲ませた記録)。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: volume_ml
+        description: 量 (ml)
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+
+  - name: int_piyolog__events_weight
+    description: 体重。kg / g の混在を g に揃える。memo に `服あり` 等が入る。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: weight_g
+        description: 体重 (g)
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+
+  - name: int_piyolog__events_height
+    description: 身長。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: height_cm
+        description: 身長 (cm)
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+
+  - name: int_piyolog__events_head_circumference
+    description: 頭囲。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: head_circumference_cm
+        description: 頭囲 (cm)
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+
+  - name: int_piyolog__events_chest_circumference
+    description: 胸囲。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: chest_circumference_cm
+        description: 胸囲 (cm)
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+
+  - name: int_piyolog__events_wake_up
+    description: 起きる。直前の睡眠の継続時間を持つ (方針Y)。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: sleep_duration_minutes
+        description: 直前の睡眠の継続時間 (分)。`(H時間M分)` を換算したもの
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+
+  - name: int_piyolog__events_sleep
+    description: 寝る。構造化する値はなく memo のみ。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+
+  - name: int_piyolog__events_pee
+    description: おしっこ。構造化する値はなく memo のみ (トイレトレーニングの記録等)。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+
+  - name: int_piyolog__events_poop
+    description: うんち。選択肢 `(量/硬さ/色)` を列に振り分ける。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: poop_tags
+        description: 先頭の `(...)` を `/` で分割した選択肢の配列 (選択肢なしは空配列)
+      - name: amount
+        description: 量 (多め / 少なめ / ちょこっと)
+      - name: consistency
+        description: 硬さ (やわらかめ / かため / 下痢)
+      - name: color
+        description: 色 (黄色 / 橙 / 緑 / 茶色)
+
+  - name: int_piyolog__events_breastfeeding
+    description: 母乳。左右の授乳時間を持つ。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: total_minutes
+        description: 左右の授乳時間の合計 (分)。時間情報のない記録 (detail_raw が `母乳` 等) は NULL
+        tests:
+          - parsed_when_detail_present:
+              config:
+                severity: warn
+      - name: left_minutes
+        description: 左の授乳時間 (分)
+      - name: right_minutes
+        description: 右の授乳時間 (分)
+      - name: side_order_mark
+        description: 左右を結ぶ記号 (▶ / ◀ / /)。意味 (どちらから飲ませたか) はアプリ仕様未確認のため記号のまま保持
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["▶", "◀", "/"]
+              config:
+                severity: warn
+      - name: volume_ml
+        description: 量 (ml)。`左11分 ◀ 右10分 (120ml)` のような量付きの記録のみ
+
+  - name: int_piyolog__events_myobrace
+    description: マイオブレース (口腔筋機能トレーニング)。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: overnight_trial_result
+        description: 夜間装着の結果記号 (🔴 / △ / ▲ / ❌)。意味づけはアプリ仕様未確認のため記号のまま保持
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["🔴", "△", "▲", "❌"]
+              config:
+                severity: warn
+      - name: duration_seconds
+        description: 単独行で書かれた実施/装着時間 (`30分` 等) を秒に換算したもの
+
+  - name: int_piyolog__events_free_text
+    description: 構造化しない種別 (event_group = free_text / routine / milestone) をまとめたもの。event_type で絞り込んで使う (ADR-0011)。
+    columns:
+      - name: event_id
+        description: "`{daily_header_id}:{event_seq}`。int_piyolog__events の主キー"
+        tests:
+          - unique
+          - not_null
+      - name: event_type
+        tests:
+          - not_null

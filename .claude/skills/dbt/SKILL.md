@@ -25,6 +25,7 @@ staging は dbt SQL モデルが raw を直接パースするのではなく、`
 - `stg_piyolog__daily_headers` — 日次ヘッダー 1 レコード
 - `stg_piyolog__daily_notes` — 日次メモ 1 レコード
 - `int_piyolog__sleep_intervals` — 寝る→起きるのペアリングで区間化
+- `int_piyolog__events` — 全種別のイベント（種別ごとモデルの土台）
 - `int_piyolog__events_temperature` — 体温イベントを構造化
 - `fct_piyolog__sleep` — 睡眠マート
 
@@ -59,12 +60,22 @@ staging は dbt SQL モデルが raw を直接パースするのではなく、`
   `(daily_header_id, event_seq)`。2025-09 以降は同一年月に2子供のファイルが併存するため
   `(source_year_month, log_date)` だけでは一意にならない点に注意
 - `events.event_at` は `log_date` + イベント時刻を合成した DATETIME（単体で日付フィルタできるようにするための非正規化）
-- 未知種別の検知（方針 P）は UDF ではなく `event_type_raw` への dbt `accepted_values`
-  テスト（severity: warn）で行う
+- 未知種別の検知（方針 P）は UDF ではなく `event_type_raw` から seed `known_event_types` への
+  dbt `relationships` テスト（severity: warn）で行う
 
 ## intermediate 設計方針
 
-- 既知種別を固定定義し、未知種別は警告で検知（方針 P）
+- 既知種別は seed `known_event_types`（`dbt/seeds/`, `event_type` → `event_group`）が単一の定義元。
+  種別を追加するときは seed と `docs/known_event_types.md` の両方を更新する
+- 土台 `int_piyolog__events`（table）で child_name / log_date を付与し、未知種別を `その他` に寄せる
+  （方針 P）。種別ごとモデルはこれを参照する view
+- 構造化する種別（measurement / state / breastfeeding / training）は `int_piyolog__events_<entity>` を
+  個別に作る。構造化しない種別（free_text / routine / milestone）は `int_piyolog__events_free_text`
+  に集約する（[ADR-0011](../../../docs/adr/0011-intermediate-event-type-models.md)）
+- 種別ごとモデルは共通列マクロ `piyolog_event_columns()` で始め、末尾に `memo` と `detail_raw` を残す。
+  値と補足メモの区切りは半角スペース2つ（`piyolog_detail_memo()`）
+- 数値列のパース漏れは generic テスト `parsed_when_detail_present`（severity: warn）で検知する
+- 仕様: `docs/piyolog_intermediate_layer_spec.md`
 - 睡眠 staging は生のまま 1 行（方針 X）、区間化は intermediate で（方針 Y）
 - `起きる` に付随する継続時間を duration として信頼する
 

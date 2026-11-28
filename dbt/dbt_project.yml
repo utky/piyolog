@@ -6,6 +6,8 @@ profile: "piyolog"
 
 model-paths: ["models"]
 function-paths: ["functions"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
 
 clean-targets:
   - "target"
@@ -25,6 +27,11 @@ models:
     marts:
       +schema: marts
       +materialized: table
+
+# 既知種別の seed は intermediate の種別振り分けで使うため piyolog_intermediate に置く。
+seeds:
+  piyolog:
+    +schema: intermediate
 
 # parse_piyolog_export UDF は staging と同じ piyolog_staging データセットに置く。
 functions:

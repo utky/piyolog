@@ -138,8 +138,9 @@ from parsed, unnest(parsed.result.<headers|events|notes>) as <field>
 ## 4. テストと品質ゲート
 
 - `dbt/models/staging/_piyolog__staging_models.yml`: `daily_header_id` の `unique`/`not_null`
-  (daily_headers, daily_notes)、`event_type_raw` の `not_null` + `accepted_values`
-  (severity: warn、`docs/known_event_types.md` の35種別)
+  (daily_headers, daily_notes)、`event_type_raw` の `not_null` + seed `known_event_types` への
+  `relationships`(severity: warn、`docs/known_event_types.md` の35種別。フェーズ4で `accepted_values`
+  の直書きから置き換え、[ADR-0011](adr/0011-intermediate-event-type-models.md))
 - `dbt/tests/assert_stg_piyolog__events_unique_key.sql`: `(daily_header_id, event_seq)` の
   複合一意性を検証する単発テスト(dbt_utils 非依存)
 - `tests/test_parse.py`: `parse_piyolog_export.py` のユニットテスト(pytest, モックなし)
