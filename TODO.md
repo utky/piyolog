@@ -100,9 +100,12 @@ dbt/BigQuery に完結させる方式に変更した ([ADR-0009](docs/adr/0009-b
 - [x] `tf/modules/dbt_job/` (dbt 用 SA・データセット単位の IAM・`piyolog-dbt` Cloud Run job) を実装する
 - [x] `tf/modules/orchestration/` (Workflow `piyolog-daily` + Scheduler) を実装し、旧 `tf/modules/scheduler/` を置き換える
 - [x] `deploy.yml` で `piyolog-dbt` イメージも build/push/再デプロイする
-- [ ] (マージ後) CI で `piyolog-dbt` イメージが push されたことを確認する
-- [ ] (ローカル) `tofu plan` で差分を確認し `tofu apply` する (Scheduler ジョブは再作成、Scheduler SA は `moved` で引き継ぎ)
-- [ ] Workflow `piyolog-daily` を手動実行し、importer → dbt が完走することを確認する (Workflow SA の最小権限 `run.invoker` + `run.viewer` で足りるかもここで確認)
+- [x] (マージ後) CI で `piyolog-dbt` イメージが push されたことを確認する (`Build and Push Image` run 46063365430、importer/dbt の2イメージとも成功)
+- [x] (ローカル) `tofu plan` で差分を確認し `tofu apply` する (2026-11-27、15 added / 2 destroyed。Scheduler ジョブは `piyolog-daily` として再作成、Scheduler SA は `moved` で引き継ぎ)
+- [x] Workflow `piyolog-daily` を手動実行し、importer → dbt が完走することを確認する (2026-11-27、Scheduler を手動トリガーして SUCCEEDED。importer `piyolog-importer-kwm58` → dbt `piyolog-dbt-jjbvw` の順に実行、dbt は PASS=17 / WARN=0 / ERROR=0)
+  - Workflow SA は `run.invoker` (job 単位) + `run.viewer` で完了待ちまで動作し、`run.admin` は不要だった
+  - dbt SA は dataset 単位の `dataEditor` で Python UDF の `CREATE OR REPLACE` を含めて build できた
+  - apply 直後の初回トリガーは Scheduler SA の `workflows.invoker` が IAM 未反映で 403。約10分後の再トリガーで成功(apply 直後の動作確認は IAM 反映待ちが必要)
 
 ---
 
